@@ -26,6 +26,14 @@ from .mea import MEAModel
 from .eladder import EfficiencyLadderModel
 from .merge import MergerAnalysisModel
 from .bootstrap import BootstrapDEAModel
+from .nonradial import NonRadialModel
+from .lgo import LGOModel
+from .rdm import RDMModel
+from .addmin import AddMinModel
+from .addsupereff import AddSuperEffModel
+from .deaps import DEAPSModel
+from .cross_efficiency import CrossEfficiencyModel
+from .undesirable import transform_undesirable
 
 __version__ = "1.0.0"
 __all__ = [
@@ -43,6 +51,14 @@ __all__ = [
     "MEAModel",
     "EfficiencyLadderModel",
     "MergerAnalysisModel",
-    "BootstrapDEAModel"
+    "BootstrapDEAModel",
+    "NonRadialModel",
+    "LGOModel",
+    "RDMModel",
+    "AddMinModel",
+    "AddSuperEffModel",
+    "DEAPSModel",
+    "CrossEfficiencyModel",
+    "transform_undesirable"
 ]
 

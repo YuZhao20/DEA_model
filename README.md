@@ -89,6 +89,16 @@ Data Envelopment Analysis (DEA) implementation in Python based on Hosseinzadeh L
 - **Merger Analysis** - Based on Benchmarking package
 - **Bootstrap DEA** - Based on Benchmarking package
 
+#### Additional Models from deaR Package
+- **Non-Radial DEA Model** - Based on deaR package (model_nonradial)
+- **Linear Goal-Oriented (LGO) DEA Model** - Based on deaR package (model_lgo)
+- **Range Directional Model (RDM)** - Based on Portela et al. (2004), deaR package (model_rdm)
+- **Additive Min (mADD) Model** - Based on Aparicio et al. (2007), deaR package (model_addmin)
+- **Additive Super-Efficiency Model** - Based on Du, Liang and Zhu (2010), deaR package (model_addsupereff)
+- **DEA-PS (Preference Structure) Model** - Based on Zhu (1996), deaR package (model_deaps)
+- **Cross-Efficiency Analysis** - Based on Doyle and Green (1994), deaR package (cross_efficiency)
+- **Undesirable Inputs/Outputs Handling** - Based on Seiford and Zhu (2002), deaR package (undesirable_basic)
+
 ## インストール
 
 ```bash
@@ -658,6 +668,59 @@ print(f"Common Weights - Objective: {obj:.4f}")
 # 17. Directional Efficiency
 directional = DirectionalEfficiencyModel(inputs, outputs)
 print("Directional Efficiency:", directional.evaluate_all())
+
+# 18. Non-Radial Model
+from dea import NonRadialModel
+nonradial = NonRadialModel(inputs, outputs)
+mean_eff, eff, lambdas, slack, target_in, target_out = nonradial.solve(0, orientation='io', rts='vrs')
+print(f"Non-Radial Efficiency: {mean_eff:.4f}")
+
+# 19. Linear Goal-Oriented (LGO) Model
+from dea import LGOModel
+lgo = LGOModel(inputs, outputs)
+rho, beta, lambdas, target_in, target_out, slack_in, slack_out, _, _ = lgo.solve(0, rts='vrs')
+print(f"LGO Efficiency: {rho:.4f}")
+
+# 20. Range Directional Model (RDM)
+from dea import RDMModel
+rdm = RDMModel(inputs, outputs)
+rho, beta, lambdas, target_in, target_out = rdm.solve(0, orientation='no')
+print(f"RDM Efficiency: {rho:.4f}")
+
+# 21. Additive Min Model
+from dea import AddMinModel
+addmin = AddMinModel(inputs, outputs)
+objval, lambdas, slack_in, slack_out, target_in, target_out = addmin.solve(0, rts='vrs')
+print(f"AddMin Objective: {objval:.4f}")
+
+# 22. Additive Super-Efficiency Model
+from dea import AddSuperEffModel
+addsupereff = AddSuperEffModel(inputs, outputs)
+delta, objval, lambdas, t_in, t_out, target_in, target_out = addsupereff.solve(0, rts='crs')
+print(f"Additive Super-Efficiency: {delta:.4f}")
+
+# 23. DEA-PS (Preference Structure) Model
+from dea import DEAPSModel
+deaps = DEAPSModel(inputs, outputs)
+mean_eff, eff, lambdas, slack, target_in, target_out = deaps.solve(0, orientation='io', rts='vrs', weight_eff=np.array([1, 2]))
+print(f"DEA-PS Efficiency: {mean_eff:.4f}")
+
+# 24. Cross-Efficiency Analysis
+from dea import CrossEfficiencyModel
+cross = CrossEfficiencyModel(inputs, outputs)
+results = cross.solve(orientation='io', rts='crs', M2=False, M3=False)
+print("Cross-Efficiency Matrix:", results['Arbitrary']['cross_eff'])
+print("Average Scores (A):", results['Arbitrary']['A'])
+print("Average Scores (e):", results['Arbitrary']['e'])
+
+# 25. Undesirable Inputs/Outputs
+from dea import transform_undesirable
+# Transform undesirable inputs (first input) and outputs (first output)
+transformed_inputs, transformed_outputs, vtrans_i, vtrans_o = transform_undesirable(
+    inputs, outputs, ud_inputs=np.array([0]), ud_outputs=np.array([0])
+)
+print("Transformed inputs shape:", transformed_inputs.shape)
+print("Translation vectors:", vtrans_i, vtrans_o)
 ```
 
 ### テスト実行
