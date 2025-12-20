@@ -150,6 +150,31 @@ class ModifiedSBMModel:
         eff, lambdas, input_slacks, output_slacks = sbm.solve_model2(dmu_index)
         return eff, lambdas, input_slacks, output_slacks
     
+    def solve(self, dmu_index: int, orientation: str = 'input', rts: str = 'vrs') -> Tuple[float, np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Solve Modified SBM Model
+        
+        Parameters:
+        -----------
+        dmu_index : int
+            Index of DMU to evaluate
+        orientation : str
+            'input' or 'output'
+        rts : str
+            Returns to scale (for compatibility, not used in Modified SBM)
+        
+        Returns:
+        --------
+        efficiency : float
+        lambdas : np.ndarray
+        input_slacks : np.ndarray
+        output_slacks : np.ndarray
+        """
+        if orientation == 'input':
+            return self.solve_input_oriented(dmu_index)
+        else:
+            return self.solve_output_oriented(dmu_index)
+    
     def evaluate_all(self, orientation: str = 'input') -> pd.DataFrame:
         results = []
         for j in range(self.n_dmus):
