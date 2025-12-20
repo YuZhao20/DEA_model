@@ -88,7 +88,7 @@ if page == "データアップロード":
     
     uploaded_file = st.file_uploader("CSVファイルをアップロード", type=['csv'])
 
-    if uploaded_file is not None:
+if uploaded_file is not None:
         try:
             df = pd.read_csv(uploaded_file)
             st.session_state.data = df
@@ -193,16 +193,81 @@ if page == "データアップロード":
         
         # Add time periods for Malmquist if needed
         if template.get("time_periods", False):
-            periods = np.tile([1, 2], n_dmus // 2)
-            if n_dmus % 2 == 1:
-                periods = np.append(periods, 1)
-            sample_data['Period'] = periods
+            # For Malmquist, each DMU needs data for both time periods
+            # Generate data for period 1
+            base_efficiency_t = np.random.uniform(0.7, 1.0, n_dmus)
+            sample_data_t = {
+                'DMU': [f'DMU_{i+1}' for i in range(n_dmus)],
+                'Period': [1] * n_dmus
+            }
+            
+            # Generate inputs and outputs for period 1
+            for i in range(n_inputs):
+                base_input = np.random.uniform(5, 15, n_dmus)
+                inputs = base_input / (base_efficiency_t + 0.1)
+                sample_data_t[f'Input_{i+1}'] = inputs
+            
+            for i in range(n_outputs):
+                base_output = np.random.uniform(3, 12, n_dmus)
+                outputs = base_output * (base_efficiency_t + 0.2)
+                sample_data_t[f'Output_{i+1}'] = outputs
+            
+            # Generate data for period 2 (with some improvement/degradation)
+            base_efficiency_t1 = base_efficiency_t + np.random.uniform(-0.1, 0.15, n_dmus)
+            base_efficiency_t1 = np.clip(base_efficiency_t1, 0.6, 1.0)
+            
+            sample_data_t1 = {
+                'DMU': [f'DMU_{i+1}' for i in range(n_dmus)],
+                'Period': [2] * n_dmus
+            }
+            
+            # Generate inputs and outputs for period 2
+            for i in range(n_inputs):
+                base_input = np.random.uniform(5, 15, n_dmus)
+                inputs = base_input / (base_efficiency_t1 + 0.1)
+                sample_data_t1[f'Input_{i+1}'] = inputs
+            
+            for i in range(n_outputs):
+                base_output = np.random.uniform(3, 12, n_dmus)
+                outputs = base_output * (base_efficiency_t1 + 0.2)
+                sample_data_t1[f'Output_{i+1}'] = outputs
+            
+            # Combine both periods
+            df_t = pd.DataFrame(sample_data_t)
+            df_t1 = pd.DataFrame(sample_data_t1)
+            df_sample = pd.concat([df_t, df_t1], ignore_index=True)
+            
+            # Sort by DMU and Period
+            df_sample = df_sample.sort_values(['DMU', 'Period']).reset_index(drop=True)
+        else:
+            df_sample = pd.DataFrame(sample_data)
         
-        df_sample = pd.DataFrame(sample_data)
         st.session_state.data = df_sample
-        st.session_state.inputs = df_sample[[f'Input_{i+1}' for i in range(n_inputs)]].values
-        st.session_state.outputs = df_sample[[f'Output_{i+1}' for i in range(n_outputs)]].values
-        st.session_state.dmu_names = df_sample['DMU'].values
+        
+        # For Malmquist, we need to separate data by period
+        if template.get("time_periods", False):
+            # Store period 1 and period 2 data separately for Malmquist
+            df_t = df_sample[df_sample['Period'] == 1].copy()
+            df_t1 = df_sample[df_sample['Period'] == 2].copy()
+            
+            # Ensure both periods have the same DMUs
+            common_dmus = set(df_t['DMU'].unique()) & set(df_t1['DMU'].unique())
+            df_t = df_t[df_t['DMU'].isin(common_dmus)].sort_values('DMU').reset_index(drop=True)
+            df_t1 = df_t1[df_t1['DMU'].isin(common_dmus)].sort_values('DMU').reset_index(drop=True)
+            
+            st.session_state.inputs_t = df_t[[f'Input_{i+1}' for i in range(n_inputs)]].values
+            st.session_state.outputs_t = df_t[[f'Output_{i+1}' for i in range(n_outputs)]].values
+            st.session_state.inputs_t1 = df_t1[[f'Input_{i+1}' for i in range(n_inputs)]].values
+            st.session_state.outputs_t1 = df_t1[[f'Output_{i+1}' for i in range(n_outputs)]].values
+            st.session_state.dmu_names = df_t['DMU'].values
+            
+            # Also set regular inputs/outputs for other models (use period 1)
+            st.session_state.inputs = st.session_state.inputs_t
+            st.session_state.outputs = st.session_state.outputs_t
+        else:
+            st.session_state.inputs = df_sample[[f'Input_{i+1}' for i in range(n_inputs)]].values
+            st.session_state.outputs = df_sample[[f'Output_{i+1}' for i in range(n_outputs)]].values
+            st.session_state.dmu_names = df_sample['DMU'].values
         
         st.success(f"サンプルデータを生成しました: {n_dmus} DMUs, {n_inputs} 入力, {n_outputs} 出力")
         st.dataframe(df_sample, use_container_width=True)
@@ -1084,9 +1149,15 @@ $$\lambda_k \geq 0$$
                         results = pd.DataFrame(results_list)
                     
                     elif model_type == "Malmquist":
-                        st.warning("Malmquistモデルには時系列データが必要です。現在の実装では基本的な分析のみサポートします。")
-                        model = MalmquistModel(st.session_state.inputs, st.session_state.outputs)
-                        results = model.evaluate_all()
+                        if hasattr(st.session_state, 'inputs_t') and hasattr(st.session_state, 'inputs_t1'):
+                            model = MalmquistModel(
+                                st.session_state.inputs_t, st.session_state.outputs_t,
+                                st.session_state.inputs_t1, st.session_state.outputs_t1
+                            )
+                            results = model.evaluate_all()
+                        else:
+                            st.error("Malmquistモデルには時系列データが必要です。「データアップロード」ページで「時系列データ（Malmquist用）」テンプレートを使用してデータを生成してください。")
+                            results = None
                     
                     elif model_type == "Efficiency Ladder":
                         model = EfficiencyLadderModel(st.session_state.inputs, st.session_state.outputs)
