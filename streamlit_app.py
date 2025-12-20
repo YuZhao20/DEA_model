@@ -900,6 +900,7 @@ elif page == "結果の可視化":
 else:
             # Efficiency score visualization
             eff_cols = [col for col in results.columns if 'Efficiency' in col or 'efficiency' in col.lower()]
+            eff_col = None
             if eff_cols:
                 eff_col = eff_cols[0]
                 
@@ -951,8 +952,8 @@ else:
                     if st.session_state.inputs.shape[1] > 1:
                         plot_df['Input2'] = st.session_state.inputs[:, 1]
                     
-                    if eff_cols and len(eff_cols) > 0 and eff_cols[0] in results.columns:
-                        plot_df['Efficiency'] = results[eff_cols[0]].values
+                    if eff_cols and len(eff_cols) > 0 and eff_col in results.columns:
+                        plot_df['Efficiency'] = results[eff_col].values
                     
                     # Scatter plot
                     if 'Efficiency' in plot_df.columns:
