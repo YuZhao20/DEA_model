@@ -363,7 +363,13 @@ $$\lambda_j \geq 0, \quad s_i^- \geq 0, \quad s_r^+ \geq 0$$
         }
         
         if model_type in model_formulations:
-            st.markdown(model_formulations[model_type])
+            # Display each line separately for better formatting
+            formula_text = model_formulations[model_type]
+            # Split by double newlines to preserve paragraph breaks
+            paragraphs = formula_text.split('\n\n')
+            for para in paragraphs:
+                if para.strip():
+                    st.markdown(para.strip())
         else:
             st.info(f"{model_type}モデルの定式化は準備中です。")
         
@@ -465,6 +471,11 @@ elif page == "高度なモデル":
         g_outputs = None
         sbm_type = "Model 1"
         ap_orientation = "入力指向"
+        rts = "vrs"
+        
+        # RTS parameter for models that support it
+        if model_type in ["SBM", "Directional Efficiency", "Norm L1"]:
+            rts = st.selectbox("規模の収穫", ["vrs", "drs", "crs", "irs"], index=0, key="advanced_rts")
         
         if model_type == "Cost Efficiency":
             st.subheader("入力コストの設定")
@@ -594,7 +605,13 @@ $$\lambda_j \geq 0, y_r^* \geq 0$$
         }
         
         if model_type in model_formulations:
-            st.markdown(model_formulations[model_type])
+            # Display each line separately for better formatting
+            formula_text = model_formulations[model_type]
+            # Split by double newlines to preserve paragraph breaks
+            paragraphs = formula_text.split('\n\n')
+            for para in paragraphs:
+                if para.strip():
+                    st.markdown(para.strip())
         else:
             st.info(f"{model_type}モデルの定式化は準備中です。")
         
@@ -804,7 +821,13 @@ $$\lambda_j \geq 0, \quad \beta \geq 0$$
         }
         
         if model_type in model_formulations:
-            st.markdown(model_formulations[model_type])
+            # Display each line separately for better formatting
+            formula_text = model_formulations[model_type]
+            # Split by double newlines to preserve paragraph breaks
+            paragraphs = formula_text.split('\n\n')
+            for para in paragraphs:
+                if para.strip():
+                    st.markdown(para.strip())
         else:
             st.info(f"{model_type}モデルの定式化は準備中です。")
         
@@ -1106,7 +1129,13 @@ $$\lambda_k \geq 0$$
         }
         
         if model_type in model_formulations:
-            st.markdown(model_formulations[model_type])
+            # Display each line separately for better formatting
+            formula_text = model_formulations[model_type]
+            # Split by double newlines to preserve paragraph breaks
+            paragraphs = formula_text.split('\n\n')
+            for para in paragraphs:
+                if para.strip():
+                    st.markdown(para.strip())
         else:
             st.info(f"{model_type}モデルの定式化は準備中です。")
         
