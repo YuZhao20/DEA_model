@@ -137,8 +137,7 @@ if uploaded_file is not None:
         
         except Exception as e:
             st.error(f"エラー: {str(e)}")
-
-    # Sample data generator
+        # Sample data generator
     st.subheader("サンプルデータの生成")
     if st.button("サンプルデータを生成"):
         np.random.seed(42)
