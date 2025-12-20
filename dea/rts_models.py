@@ -107,22 +107,26 @@ class DRSModel:
         n_constraints = self.n_inputs + self.n_outputs + 1
         A = np.zeros((n_constraints, self.n_dmus + 1))
         
-        # Input constraints
+        # Input constraints: sum(lambda_j * x_ij) <= x_ip
         for i in range(self.n_inputs):
+            A[i, 0] = 0.0  # g doesn't appear
             A[i, 1:] = self.inputs[:, i]
         
-        # Output constraints
+        # Output constraints: -g*y_rp + sum(lambda_j * y_rj) >= 0
+        # For linprog: g*y_rp - sum(lambda_j * y_rj) <= 0
         for r in range(self.n_outputs):
-            A[self.n_inputs + r, 0] = -self.outputs[dmu_index, r]
-            A[self.n_inputs + r, 1:] = -self.outputs[:, r]
+            A[self.n_inputs + r, 0] = self.outputs[dmu_index, r]  # coefficient for g (positive)
+            A[self.n_inputs + r, 1:] = -self.outputs[:, r]  # coefficients for lambdas (negative)
         
-        # DRS constraint
+        # DRS constraint: sum(lambda_j) <= 1
+        A[self.n_inputs + self.n_outputs, 0] = 0.0
         A[self.n_inputs + self.n_outputs, 1:] = 1.0
         
         b = np.zeros(n_constraints)
         for i in range(self.n_inputs):
             b[i] = self.inputs[dmu_index, i]
-        b[self.n_inputs + self.n_outputs] = 1.0
+        # Output constraints: b = 0 (already initialized)
+        b[self.n_inputs + self.n_outputs] = 1.0  # sum(lambda) <= 1
         
         bounds = [(0, None)] * (self.n_dmus + 1)
         
@@ -218,27 +222,42 @@ class IRSModel:
         return efficiency, lambdas, input_targets, output_targets
     
     def solve_output_oriented_envelopment(self, dmu_index: int) -> Tuple[float, np.ndarray, np.ndarray, np.ndarray]:
-        """Solve Output-Oriented IRS Envelopment Model"""
+        """
+        Solve Output-Oriented IRS Envelopment Model
+        
+        max g
+        s.t. sum(lambda_j * x_ij) <= x_ip, i=1,...,m
+             -g*y_rp + sum(lambda_j * y_rj) >= 0, r=1,...,s
+             sum(lambda_j) >= 1
+             lambda_j >= 0
+        """
         c = np.zeros(self.n_dmus + 1)
-        c[0] = -1.0
+        c[0] = -1.0  # maximize g (minimize -g)
         
         n_constraints = self.n_inputs + self.n_outputs + 1
         A = np.zeros((n_constraints, self.n_dmus + 1))
         
+        # Input constraints: sum(lambda_j * x_ij) <= x_ip
         for i in range(self.n_inputs):
+            A[i, 0] = 0.0  # g doesn't appear
             A[i, 1:] = self.inputs[:, i]
         
+        # Output constraints: -g*y_rp + sum(lambda_j * y_rj) >= 0
+        # For linprog: g*y_rp - sum(lambda_j * y_rj) <= 0
         for r in range(self.n_outputs):
-            A[self.n_inputs + r, 0] = -self.outputs[dmu_index, r]
-            A[self.n_inputs + r, 1:] = -self.outputs[:, r]
+            A[self.n_inputs + r, 0] = self.outputs[dmu_index, r]  # coefficient for g (positive)
+            A[self.n_inputs + r, 1:] = -self.outputs[:, r]  # coefficients for lambdas (negative)
         
-        # IRS constraint
+        # IRS constraint: sum(lambda_j) >= 1
+        # For linprog: -sum(lambda_j) <= -1
+        A[self.n_inputs + self.n_outputs, 0] = 0.0
         A[self.n_inputs + self.n_outputs, 1:] = -1.0
         
         b = np.zeros(n_constraints)
         for i in range(self.n_inputs):
             b[i] = self.inputs[dmu_index, i]
-        b[self.n_inputs + self.n_outputs] = -1.0
+        # Output constraints: b = 0 (already initialized)
+        b[self.n_inputs + self.n_outputs] = -1.0  # -sum(lambda) <= -1
         
         bounds = [(0, None)] * (self.n_dmus + 1)
         
