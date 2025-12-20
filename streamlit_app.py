@@ -138,83 +138,83 @@ if uploaded_file is not None:
         except Exception as e:
             st.error(f"エラー: {str(e)}")
 
-        # Sample data generator
-        st.subheader("サンプルデータの生成")
+    # Sample data generator (available even without file upload)
+    st.subheader("サンプルデータの生成")
+    
+    # Sample data templates
+    sample_templates = {
+        "基本データセット（小規模）": {"n_dmus": 10, "n_inputs": 2, "n_outputs": 2, "seed": 42},
+        "基本データセット（中規模）": {"n_dmus": 20, "n_inputs": 3, "n_outputs": 2, "seed": 42},
+        "基本データセット（大規模）": {"n_dmus": 30, "n_inputs": 3, "n_outputs": 3, "seed": 42},
+        "StoNED用（単一出力）": {"n_dmus": 15, "n_inputs": 2, "n_outputs": 1, "seed": 42},
+        "複数入力・出力": {"n_dmus": 25, "n_inputs": 4, "n_outputs": 3, "seed": 42},
+        "時系列データ（Malmquist用）": {"n_dmus": 20, "n_inputs": 2, "n_outputs": 2, "seed": 42, "time_periods": True}
+    }
+    
+    selected_template = st.selectbox(
+        "サンプルデータテンプレートを選択",
+        list(sample_templates.keys())
+    )
+    
+    template = sample_templates[selected_template]
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        n_dmus = st.number_input("DMU数", min_value=5, max_value=100, value=template["n_dmus"], step=5)
+    with col2:
+        n_inputs = st.number_input("入力変数数", min_value=1, max_value=10, value=template["n_inputs"], step=1)
+    with col3:
+        n_outputs = st.number_input("出力変数数", min_value=1, max_value=10, value=template["n_outputs"], step=1)
+    
+    if st.button("サンプルデータを生成", type="primary"):
+        np.random.seed(template["seed"])
         
-        # Sample data templates
-        sample_templates = {
-            "基本データセット（小規模）": {"n_dmus": 10, "n_inputs": 2, "n_outputs": 2, "seed": 42},
-            "基本データセット（中規模）": {"n_dmus": 20, "n_inputs": 3, "n_outputs": 2, "seed": 42},
-            "基本データセット（大規模）": {"n_dmus": 30, "n_inputs": 3, "n_outputs": 3, "seed": 42},
-            "StoNED用（単一出力）": {"n_dmus": 15, "n_inputs": 2, "n_outputs": 1, "seed": 42},
-            "複数入力・出力": {"n_dmus": 25, "n_inputs": 4, "n_outputs": 3, "seed": 42},
-            "時系列データ（Malmquist用）": {"n_dmus": 20, "n_inputs": 2, "n_outputs": 2, "seed": 42, "time_periods": True}
+        # Generate realistic DEA data
+        # Create efficient frontier first
+        base_efficiency = np.random.uniform(0.7, 1.0, n_dmus)
+        
+        sample_data = {
+            'DMU': [f'DMU_{i+1}' for i in range(n_dmus)],
         }
         
-        selected_template = st.selectbox(
-            "サンプルデータテンプレートを選択",
-            list(sample_templates.keys())
+        # Generate inputs (vary with efficiency)
+        for i in range(n_inputs):
+            # More efficient DMUs use fewer inputs
+            base_input = np.random.uniform(5, 15, n_dmus)
+            inputs = base_input / (base_efficiency + 0.1)  # Inverse relationship with efficiency
+            sample_data[f'Input_{i+1}'] = inputs
+        
+        # Generate outputs (vary with efficiency)
+        for i in range(n_outputs):
+            # More efficient DMUs produce more outputs
+            base_output = np.random.uniform(3, 12, n_dmus)
+            outputs = base_output * (base_efficiency + 0.2)  # Positive relationship with efficiency
+            sample_data[f'Output_{i+1}'] = outputs
+        
+        # Add time periods for Malmquist if needed
+        if template.get("time_periods", False):
+            periods = np.tile([1, 2], n_dmus // 2)
+            if n_dmus % 2 == 1:
+                periods = np.append(periods, 1)
+            sample_data['Period'] = periods
+        
+        df_sample = pd.DataFrame(sample_data)
+        st.session_state.data = df_sample
+        st.session_state.inputs = df_sample[[f'Input_{i+1}' for i in range(n_inputs)]].values
+        st.session_state.outputs = df_sample[[f'Output_{i+1}' for i in range(n_outputs)]].values
+        st.session_state.dmu_names = df_sample['DMU'].values
+        
+        st.success(f"サンプルデータを生成しました: {n_dmus} DMUs, {n_inputs} 入力, {n_outputs} 出力")
+        st.dataframe(df_sample, use_container_width=True)
+        
+        # Download sample data
+        csv_sample = df_sample.to_csv(index=False)
+        st.download_button(
+            label="サンプルデータをCSVでダウンロード",
+            data=csv_sample,
+            file_name=f"sample_data_{n_dmus}dmus_{n_inputs}inputs_{n_outputs}outputs.csv",
+            mime="text/csv"
         )
-        
-        template = sample_templates[selected_template]
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            n_dmus = st.number_input("DMU数", min_value=5, max_value=100, value=template["n_dmus"], step=5)
-        with col2:
-            n_inputs = st.number_input("入力変数数", min_value=1, max_value=10, value=template["n_inputs"], step=1)
-        with col3:
-            n_outputs = st.number_input("出力変数数", min_value=1, max_value=10, value=template["n_outputs"], step=1)
-        
-        if st.button("サンプルデータを生成", type="primary"):
-            np.random.seed(template["seed"])
-            
-            # Generate realistic DEA data
-            # Create efficient frontier first
-            base_efficiency = np.random.uniform(0.7, 1.0, n_dmus)
-            
-            sample_data = {
-                'DMU': [f'DMU_{i+1}' for i in range(n_dmus)],
-            }
-            
-            # Generate inputs (vary with efficiency)
-            for i in range(n_inputs):
-                # More efficient DMUs use fewer inputs
-                base_input = np.random.uniform(5, 15, n_dmus)
-                inputs = base_input / (base_efficiency + 0.1)  # Inverse relationship with efficiency
-                sample_data[f'Input_{i+1}'] = inputs
-            
-            # Generate outputs (vary with efficiency)
-            for i in range(n_outputs):
-                # More efficient DMUs produce more outputs
-                base_output = np.random.uniform(3, 12, n_dmus)
-                outputs = base_output * (base_efficiency + 0.2)  # Positive relationship with efficiency
-                sample_data[f'Output_{i+1}'] = outputs
-            
-            # Add time periods for Malmquist if needed
-            if template.get("time_periods", False):
-                periods = np.tile([1, 2], n_dmus // 2)
-                if n_dmus % 2 == 1:
-                    periods = np.append(periods, 1)
-                sample_data['Period'] = periods
-            
-            df_sample = pd.DataFrame(sample_data)
-            st.session_state.data = df_sample
-            st.session_state.inputs = df_sample[[f'Input_{i+1}' for i in range(n_inputs)]].values
-            st.session_state.outputs = df_sample[[f'Output_{i+1}' for i in range(n_outputs)]].values
-            st.session_state.dmu_names = df_sample['DMU'].values
-            
-            st.success(f"サンプルデータを生成しました: {n_dmus} DMUs, {n_inputs} 入力, {n_outputs} 出力")
-            st.dataframe(df_sample, use_container_width=True)
-            
-            # Download sample data
-            csv_sample = df_sample.to_csv(index=False)
-            st.download_button(
-                label="サンプルデータをCSVでダウンロード",
-                data=csv_sample,
-                file_name=f"sample_data_{n_dmus}dmus_{n_inputs}inputs_{n_outputs}outputs.csv",
-                mime="text/csv"
-            )
 
 # Basic Models Page
 elif page == "基本モデル":
@@ -897,7 +897,7 @@ elif page == "結果の可視化":
         # Check if results is a DataFrame
         if not isinstance(results, pd.DataFrame):
             st.error("結果がDataFrame形式ではありません。分析を再実行してください。")
-        else:
+else:
             # Efficiency score visualization
             eff_cols = [col for col in results.columns if 'Efficiency' in col or 'efficiency' in col.lower()]
             eff_col = None
