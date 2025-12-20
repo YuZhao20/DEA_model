@@ -53,7 +53,11 @@ class FDHModel:
         best_peer = None
         
         # Find DMUs that dominate (have less inputs and more outputs)
+        # For FDH, we need to find the best peer that dominates
         for j in range(self.n_dmus):
+            if j == dmu_index:
+                continue
+                
             x_j = self.inputs[j, :]
             y_j = self.outputs[j, :]
             
@@ -61,7 +65,8 @@ class FDHModel:
             # For input orientation: x_j <= x_p and y_j >= y_p
             if np.all(x_j <= x_p + 1e-10) and np.all(y_j >= y_p - 1e-10):
                 # Calculate efficiency as max ratio of inputs
-                ratios = x_p / (x_j + 1e-10)  # avoid division by zero
+                # This is the input-oriented FDH efficiency
+                ratios = np.where(x_j > 1e-10, x_p / x_j, np.inf)
                 eff = np.max(ratios)
                 
                 if eff < best_eff:
@@ -69,7 +74,8 @@ class FDHModel:
                     best_peer = j
         
         if best_peer is None:
-            # No dominating DMU found, efficiency = 1
+            # No dominating DMU found, check if DMU itself is efficient
+            # For FDH, if no other DMU dominates it, it's efficient
             best_eff = 1.0
             best_peer = dmu_index
         
