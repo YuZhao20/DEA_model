@@ -295,6 +295,21 @@ elif page == "基本モデル":
         orientation = st.selectbox("方向", ["入力指向", "出力指向"], index=0)
         method = st.selectbox("方法", ["包絡モデル", "乗数モデル"], index=0)
         
+        # 包絡型と乗数型の違いについての説明
+        if method == "乗数モデル":
+            st.info("""
+            **包絡型と乗数型について:**
+            
+            包絡型と乗数型は**双対問題**の関係にあり、理論的には同じ効率値になります。
+            ただし、実装上の理由で微小な差（通常10^-6以下）が生じることがあります：
+            
+            - **乗数型**: 非Archimedean制約（epsilon制約）を使用して重みが0になることを防ぎます
+            - **数値計算の誤差**: 浮動小数点演算による微小な誤差
+            - **BCCモデル**: u0変数の表現方法による影響
+            
+            実用上は、差が10^-6以下であれば同じ結果と見なせます。
+            """)
+        
         # Additive model type selection
         model_type_add = "CCR"
         if model_type == "Additive":
