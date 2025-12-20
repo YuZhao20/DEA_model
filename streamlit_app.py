@@ -298,7 +298,7 @@ $$\lambda_j \geq 0, \quad s_i^- \geq 0, \quad s_r^+ \geq 0$$
         }
         
         if model_type in model_formulations:
-            st.latex(model_formulations[model_type])
+            st.markdown(model_formulations[model_type])
         else:
             st.info(f"{model_type}モデルの定式化は準備中です。")
         
@@ -529,7 +529,7 @@ $$\lambda_j \geq 0, y_r^* \geq 0$$
         }
         
         if model_type in model_formulations:
-            st.latex(model_formulations[model_type])
+            st.markdown(model_formulations[model_type])
         else:
             st.info(f"{model_type}モデルの定式化は準備中です。")
         
@@ -739,7 +739,7 @@ $$\lambda_j \geq 0, \quad \beta \geq 0$$
         }
         
         if model_type in model_formulations:
-            st.latex(model_formulations[model_type])
+            st.markdown(model_formulations[model_type])
         else:
             st.info(f"{model_type}モデルの定式化は準備中です。")
         
@@ -1041,7 +1041,7 @@ $$\lambda_k \geq 0$$
         }
         
         if model_type in model_formulations:
-            st.latex(model_formulations[model_type])
+            st.markdown(model_formulations[model_type])
         else:
             st.info(f"{model_type}モデルの定式化は準備中です。")
         
