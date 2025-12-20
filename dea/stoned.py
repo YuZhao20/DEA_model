@@ -83,49 +83,46 @@ class StoNEDModel:
         # Determine intercept and multiplicative model
         inter = 0 if rts == 'crs' else 1
         
-        # Force multiplicative for certain RTS
+        # Force multiplicative for certain RTS (as per R code lines 54-59)
+        original_mult = mult
         if rts in ['crs', 'drs', 'irs']:
             mult = True
-            if not mult:
+            if not original_mult:
                 warnings.warn(f"Multiplicative model induced for {rts} returns to scale")
         
         # Create Z matrix and B vector
-        # Z matrix has structure: [alpha_1, ..., alpha_n, beta_1_1, ..., beta_n_1, ..., beta_1_m, ..., beta_n_m]
+        # Following R code lines 66-97 exactly
+        # Z matrix structure: [alpha_1, ..., alpha_n, beta_1_1, ..., beta_n_1, ..., beta_1_m, ..., beta_n_m]
         # where alpha_i is intercept for DMU i, beta_i_j is coefficient for input j of DMU i
         if mult:
-            # Multiplicative: Y = b'X * exp(e) -> log(Y) = log(b'X) + e
-            # For multiplicative, we transform to: 1 = (b'X)/Y * exp(e)
+            # Multiplicative: Y = b'X * exp(e) -> 1 = (b'X)/Y * exp(e)
             if inter == 1:
-                # First n columns: intercepts (alpha)
+                # First n columns: intercepts (alpha) - diag(1/Y)
                 Z = np.diag(1.0 / self.output)
-                # Next m*n columns: beta coefficients
+                # Next m*n columns: beta coefficients - diag(X[,i]/Y) for each input i
                 for i in range(self.n_inputs):
                     Z = np.column_stack([Z, np.diag(self.inputs[:, i] / self.output)])
-            else:
+            else:  # inter == 0
                 # No intercept, only beta coefficients
-                Z = None
-                for i in range(self.n_inputs):
-                    if Z is None:
-                        Z = np.diag(self.inputs[:, i] / self.output)
-                    else:
-                        Z = np.column_stack([Z, np.diag(self.inputs[:, i] / self.output)])
+                # Start with first input
+                Z = np.diag(self.inputs[:, 0] / self.output)
+                for i in range(1, self.n_inputs):
+                    Z = np.column_stack([Z, np.diag(self.inputs[:, i] / self.output)])
             B = np.ones(self.n_dmus)
-        else:
+        else:  # MULT == 0
             # Additive: Y = b'X + e
             if inter == 1:
-                # First n columns: intercepts (alpha)
+                # First n columns: intercepts (alpha) - identity matrix
                 Z = np.eye(self.n_dmus)
-                # Next m*n columns: beta coefficients
+                # Next m*n columns: beta coefficients - diag(X[,i]) for each input i
                 for i in range(self.n_inputs):
                     Z = np.column_stack([Z, np.diag(self.inputs[:, i])])
-            else:
+            else:  # inter == 0
                 # No intercept, only beta coefficients
-                Z = None
-                for i in range(self.n_inputs):
-                    if Z is None:
-                        Z = np.diag(self.inputs[:, i])
-                    else:
-                        Z = np.column_stack([Z, np.diag(self.inputs[:, i])])
+                # Start with first input
+                Z = np.diag(self.inputs[:, 0])
+                for i in range(1, self.n_inputs):
+                    Z = np.column_stack([Z, np.diag(self.inputs[:, i])])
             B = self.output
         
         # Create constraints
@@ -192,36 +189,61 @@ class StoNEDModel:
         if mult and np.any(self.output <= 0):
             raise ValueError("Output must be positive for multiplicative model")
         
+        # Check for numerical issues in Z
+        if np.any(np.isnan(Z)) or np.any(np.isinf(Z)):
+            raise ValueError("Z matrix contains NaN or Inf values")
+        
         D = Z.T @ Z
-        # Make D positive definite
+        # Make D positive definite (as per R code line 193)
         D_max = np.max(np.abs(D))
         if D_max > 0:
             D = D + np.eye(D.shape[0]) * 1e-10 * D_max
         else:
             D = D + np.eye(D.shape[0]) * 1e-10
+        
+        # Check for numerical issues
+        if np.any(np.isnan(D)) or np.any(np.isinf(D)):
+            raise ValueError("D matrix contains NaN or Inf values")
+        
         d = Z.T @ B
         
         # Solve QP using scipy.optimize.minimize
-        # Convert to standard form: min 0.5 * x' * D * x - d' * x
-        # s.t. -G' * x <= -h (for minimize)
+        # Standard form: min 0.5 * x' * D * x - d' * x
+        # s.t. G @ x >= h (which is -G @ x <= -h for minimize)
         def objective(x):
             return 0.5 * x @ D @ x - d @ x
         
+        # Constraint: G @ x >= h, which means -G @ x <= -h for scipy
         constraints = []
         for i in range(G.shape[0]):
-            constraints.append({
-                'type': 'ineq',
-                'fun': lambda x, idx=i: -G[idx, :] @ x + h[idx]
-            })
+            # Create closure to capture i
+            def make_constraint(idx):
+                return lambda x: G[idx, :] @ x - h[idx]
+            constraints.append({'type': 'ineq', 'fun': make_constraint(i)})
         
-        # Initial guess
-        x0 = np.ones(n_vars) * 0.1
+        # Initial guess - use least squares solution as starting point
+        try:
+            # Try to get a reasonable initial guess
+            x0 = np.linalg.lstsq(Z, B, rcond=None)[0]
+            # Ensure non-negative
+            x0 = np.maximum(x0, 0.01)
+        except:
+            x0 = np.ones(n_vars) * 0.1
         
         # Bounds
         bounds = [(0, None)] * n_vars
         
-        # Solve
-        result = minimize(objective, x0, method='SLSQP', bounds=bounds, constraints=constraints)
+        # Solve with multiple methods if first fails
+        result = minimize(objective, x0, method='SLSQP', bounds=bounds, constraints=constraints,
+                         options={'maxiter': 1000, 'ftol': 1e-9})
+        
+        if not result.success:
+            # Try with trust-constr if SLSQP fails
+            try:
+                result = minimize(objective, x0, method='trust-constr', bounds=bounds,
+                                constraints=constraints, options={'maxiter': 1000})
+            except:
+                pass
         
         if not result.success:
             warnings.warn(f"Optimization may not have converged: {result.message}")
@@ -230,19 +252,21 @@ class StoNEDModel:
         solution_norm = np.sum((Z @ z_solution - B)**2)
         
         # Calculate residuals and fitted values
-        # beta_matrix: each row is for one DMU, columns are [alpha, beta_1, ..., beta_m] if inter==1
-        # or [beta_1, ..., beta_m] if inter==0
+        # beta_matrix: reshape according to R code: matrix(z_cnls$X, ncol = length(z_cnls$X) / n)
+        # This means: n_cols = n_vars / n_dmus, and reshape by column (Fortran order)
         n_cols = n_vars // self.n_dmus
-        beta_matrix = z_solution.reshape(self.n_dmus, n_cols)
+        # Reshape by column (like R's matrix function)
+        beta_matrix = z_solution.reshape(n_cols, self.n_dmus).T
         
         if inter == 0:
-            # No intercept: y_hat = beta_matrix @ X^T (each row of beta_matrix is [beta_1, ..., beta_m])
-            y_hat = np.array([beta_matrix[i, :] @ self.inputs[i, :] for i in range(self.n_dmus)])
+            # No intercept: y_hat = diag(beta_matrix @ X^T)
+            # Each row of beta_matrix is [beta_1, ..., beta_m] for one DMU
+            y_hat = np.diag(beta_matrix @ self.inputs.T)
         else:
-            # With intercept: y_hat = alpha + beta_matrix @ X^T
+            # With intercept: y_hat = diag(beta_matrix @ [1, X]^T)
             # First column is intercept, rest are beta coefficients
-            y_hat = np.array([beta_matrix[i, 0] + beta_matrix[i, 1:] @ self.inputs[i, :] 
-                             for i in range(self.n_dmus)])
+            X_with_intercept = np.column_stack([np.ones(self.n_dmus), self.inputs])
+            y_hat = np.diag(beta_matrix @ X_with_intercept.T)
         
         if mult:
             # Avoid log of zero or negative
@@ -321,13 +345,15 @@ class StoNEDModel:
                 comp_err = resid - sigma_u * np.sqrt(2 / np.pi)
             
             # Conditional mean
+            # Following R code line 311-314 (Keshvari/Kuosmanen 2013 correction)
             mu_star = -comp_err * sigma_u**2 / sum_sigma2
             sigma_star_sq = sigma_u**2 * sigma_v**2 / sum_sigma2
-            sigma_star = np.sqrt(sigma_star_sq) if sigma_star_sq > 0 else 0.0
             
             # Conditional mean of inefficiency
-            # Avoid division by zero
-            comp_err_scaled = comp_err / np.sqrt(sigma_v**2 / sum_sigma2) if sum_sigma2 > 0 else comp_err
+            # R code: cond_mean <- mu_star + (sigma_u * sigma_v) *
+            #         (dnorm(Comp_err / sigma_v * sigma_v) / (1 - pnorm(Comp_err / sigma_v * sigma_v)))
+            # Note: sigma_v * sigma_v in denominator, not sigma_v^2 / sum_sigma2
+            comp_err_scaled = comp_err / (sigma_v**2)
             norm_cdf_val = norm.cdf(comp_err_scaled)
             norm_pdf_val = norm.pdf(comp_err_scaled)
             
@@ -336,7 +362,7 @@ class StoNEDModel:
                 ratio = np.where(norm_cdf_val < 1.0 - 1e-10,
                                norm_pdf_val / (1 - norm_cdf_val),
                                np.inf)
-                cond_mean = mu_star + (sigma_u * sigma_v / np.sqrt(sum_sigma2)) * ratio
+                cond_mean = mu_star + (sigma_u * sigma_v) * ratio
             
             if mult:
                 eff_score = np.exp(-cond_mean)
@@ -356,9 +382,16 @@ class StoNEDModel:
             eff_score = np.full(self.n_dmus, np.nan)
             frontier_points = np.full(self.n_dmus, np.nan)
         
-        # Calculate slack norm
-        slack = G @ z_solution - h
-        slack_norm = -np.sum(slack[slack < 0])
+        # Calculate slack norm (as per R code lines 202-204)
+        # Check for numerical issues before computing slack
+        if np.any(np.isnan(z_solution)) or np.any(np.isinf(z_solution)):
+            slack_norm = np.nan
+        else:
+            try:
+                slack = G @ z_solution - h
+                slack_norm = -np.sum(slack[slack < 0])
+            except:
+                slack_norm = np.nan
         
         return {
             'residualNorm': slack_norm,
