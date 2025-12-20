@@ -74,8 +74,8 @@ if page == "データアップロード":
     """)
     
     uploaded_file = st.file_uploader("CSVファイルをアップロード", type=['csv'])
-    
-    if uploaded_file is not None:
+
+if uploaded_file is not None:
         try:
             df = pd.read_csv(uploaded_file)
             st.session_state.data = df
@@ -524,7 +524,7 @@ elif page == "結果の可視化":
     
     if st.session_state.results is None:
         st.warning("⚠️ まず他のページで分析を実行してください")
-else:
+    else:
         results = st.session_state.results
         
         # Efficiency score visualization
