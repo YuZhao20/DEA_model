@@ -243,4 +243,149 @@ class CCRModel:
             results.append(result_dict)
         
         return pd.DataFrame(results)
+    
+    def solve_output_oriented_envelopment(self, dmu_index: int) -> Tuple[float, np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Solve Output-Oriented CCR Envelopment Model (3.3.1)
+        
+        max u
+        s.t. sum(lambda_j * x_ij) <= x_ip, i=1,...,m
+             -u*y_rp + sum(lambda_j * y_rj) >= 0, r=1,...,s
+             lambda_j >= 0, j=1,...,n
+        
+        Parameters:
+        -----------
+        dmu_index : int
+            Index of DMU under evaluation (0-based)
+        
+        Returns:
+        --------
+        efficiency : float
+            Efficiency score (u*)
+        lambdas : np.ndarray
+            Optimal intensity variables (lambda*)
+        input_targets : np.ndarray
+            Target input values
+        output_targets : np.ndarray
+            Target output values
+        """
+        # Objective: maximize u
+        # Variables: [u, lambda_1, lambda_2, ..., lambda_n]
+        c = np.zeros(self.n_dmus + 1)
+        c[0] = -1.0  # negative because linprog minimizes
+        
+        # Constraints matrix
+        n_constraints = self.n_inputs + self.n_outputs
+        A = np.zeros((n_constraints, self.n_dmus + 1))
+        
+        # Input constraints: sum(lambda_j * x_ij) <= x_ip
+        for i in range(self.n_inputs):
+            A[i, 0] = 0.0  # u doesn't appear
+            A[i, 1:] = self.inputs[:, i]
+        
+        # Output constraints: -u*y_rp + sum(lambda_j * y_rj) >= 0
+        # For linprog: u*y_rp - sum(lambda_j * y_rj) <= 0
+        for r in range(self.n_outputs):
+            A[self.n_inputs + r, 0] = self.outputs[dmu_index, r]  # coefficient for u
+            A[self.n_inputs + r, 1:] = -self.outputs[:, r]
+        
+        # Right-hand side
+        b = np.zeros(n_constraints)
+        for i in range(self.n_inputs):
+            b[i] = self.inputs[dmu_index, i]
+        
+        # Bounds: all variables >= 0
+        bounds = [(0, None)] * (self.n_dmus + 1)
+        
+        # Solve linear program
+        result = linprog(c, A_ub=A, b_ub=b, bounds=bounds, method='highs')
+        
+        if not result.success:
+            raise RuntimeError(f"Optimization failed for DMU {dmu_index}: {result.message}")
+        
+        efficiency = -result.fun  # negate because we minimized negative
+        lambdas = result.x[1:]
+        
+        # Calculate target inputs and outputs
+        input_targets = lambdas @ self.inputs
+        output_targets = lambdas @ self.outputs
+        
+        return efficiency, lambdas, input_targets, output_targets
+    
+    def solve_output_oriented_multiplier(self, dmu_index: int, epsilon: float = 1e-6) -> Tuple[float, np.ndarray, np.ndarray]:
+        """
+        Solve Output-Oriented CCR Multiplier Model (3.3.2)
+        
+        min sum(v_i * x_ip)
+        s.t. -sum(v_i * x_ij) + sum(u_r * y_rj) <= 0, j=1,...,n
+             sum(u_r * y_rp) = 1
+             u_r >= epsilon, v_i >= epsilon
+        
+        Parameters:
+        -----------
+        dmu_index : int
+            Index of DMU under evaluation (0-based)
+        epsilon : float
+            Small positive value for non-Archimedean constraint
+        
+        Returns:
+        --------
+        efficiency : float
+            Efficiency score
+        v_weights : np.ndarray
+            Optimal input weights (v*)
+        u_weights : np.ndarray
+            Optimal output weights (u*)
+        """
+        # Objective: minimize sum(v_i * x_ip)
+        c = np.zeros(self.n_inputs + self.n_outputs)
+        c[:self.n_inputs] = self.inputs[dmu_index, :]
+        
+        # Constraints matrix
+        n_constraints = self.n_dmus + 1 + self.n_inputs + self.n_outputs
+        A = np.zeros((n_constraints, self.n_inputs + self.n_outputs))
+        
+        # DMU constraints: -sum(v_i * x_ij) + sum(u_r * y_rj) <= 0
+        for j in range(self.n_dmus):
+            A[j, :self.n_inputs] = -self.inputs[j, :]
+            A[j, self.n_inputs:] = self.outputs[j, :]
+        
+        # Normalization constraint: sum(u_r * y_rp) = 1
+        A[self.n_dmus, self.n_inputs:] = self.outputs[dmu_index, :]
+        
+        # Epsilon constraints
+        for i in range(self.n_inputs):
+            A[self.n_dmus + 1 + i, i] = -1.0
+        for r in range(self.n_outputs):
+            A[self.n_dmus + 1 + self.n_inputs + r, self.n_inputs + r] = -1.0
+        
+        # Right-hand side
+        b = np.zeros(n_constraints)
+        b[self.n_dmus] = 1.0  # normalization
+        for i in range(self.n_inputs):
+            b[self.n_dmus + 1 + i] = -epsilon
+        for r in range(self.n_outputs):
+            b[self.n_dmus + 1 + self.n_inputs + r] = -epsilon
+        
+        # Constraint types
+        A_eq = A[self.n_dmus:self.n_dmus+1, :]
+        b_eq = b[self.n_dmus:self.n_dmus+1]
+        A_ub = np.vstack([A[:self.n_dmus, :], A[self.n_dmus+1:, :]])
+        b_ub = np.hstack([b[:self.n_dmus], b[self.n_dmus+1:]])
+        
+        # Bounds
+        bounds = [(0, None)] * (self.n_inputs + self.n_outputs)
+        
+        # Solve
+        result = linprog(c, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq,
+                        bounds=bounds, method='highs')
+        
+        if not result.success:
+            raise RuntimeError(f"Optimization failed for DMU {dmu_index}: {result.message}")
+        
+        efficiency = result.fun
+        v_weights = result.x[:self.n_inputs]
+        u_weights = result.x[self.n_inputs:]
+        
+        return efficiency, v_weights, u_weights
 

@@ -256,4 +256,174 @@ class BCCModel:
             results.append(result_dict)
         
         return pd.DataFrame(results)
+    
+    def solve_output_oriented_envelopment(self, dmu_index: int) -> Tuple[float, np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Solve Output-Oriented BCC Envelopment Model (3.3.4)
+        
+        max u
+        s.t. sum(lambda_j * x_ij) <= x_ip, i=1,...,m
+             -u*y_rp + sum(lambda_j * y_rj) >= 0, r=1,...,s
+             sum(lambda_j) = 1
+             lambda_j >= 0, j=1,...,n
+        
+        Parameters:
+        -----------
+        dmu_index : int
+            Index of DMU under evaluation (0-based)
+        
+        Returns:
+        --------
+        efficiency : float
+            Efficiency score (u*)
+        lambdas : np.ndarray
+            Optimal intensity variables (lambda*)
+        input_targets : np.ndarray
+            Target input values
+        output_targets : np.ndarray
+            Target output values
+        """
+        # Objective: maximize u
+        c = np.zeros(self.n_dmus + 1)
+        c[0] = -1.0
+        
+        # Constraints matrix
+        n_constraints = self.n_inputs + self.n_outputs + 1
+        A = np.zeros((n_constraints, self.n_dmus + 1))
+        
+        # Input constraints: sum(lambda_j * x_ij) <= x_ip
+        for i in range(self.n_inputs):
+            A[i, 0] = 0.0
+            A[i, 1:] = self.inputs[:, i]
+        
+        # Output constraints: -u*y_rp + sum(lambda_j * y_rj) >= 0
+        for r in range(self.n_outputs):
+            A[self.n_inputs + r, 0] = self.outputs[dmu_index, r]
+            A[self.n_inputs + r, 1:] = -self.outputs[:, r]
+        
+        # Convexity constraint: sum(lambda_j) = 1
+        A[self.n_inputs + self.n_outputs, 0] = 0.0
+        A[self.n_inputs + self.n_outputs, 1:] = -np.ones(self.n_dmus)
+        
+        # Right-hand side
+        b = np.zeros(n_constraints)
+        for i in range(self.n_inputs):
+            b[i] = self.inputs[dmu_index, i]
+        b[self.n_inputs + self.n_outputs] = -1.0
+        
+        # Constraint types
+        A_eq = A[self.n_inputs + self.n_outputs:self.n_inputs + self.n_outputs + 1, :]
+        b_eq = b[self.n_inputs + self.n_outputs:self.n_inputs + self.n_outputs + 1]
+        A_ub = A[:self.n_inputs + self.n_outputs, :]
+        b_ub = b[:self.n_inputs + self.n_outputs]
+        
+        # Bounds
+        bounds = [(0, None)] * (self.n_dmus + 1)
+        
+        # Solve
+        result = linprog(c, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq,
+                        bounds=bounds, method='highs')
+        
+        if not result.success:
+            raise RuntimeError(f"Optimization failed for DMU {dmu_index}: {result.message}")
+        
+        efficiency = -result.fun
+        lambdas = result.x[1:]
+        
+        input_targets = lambdas @ self.inputs
+        output_targets = lambdas @ self.outputs
+        
+        return efficiency, lambdas, input_targets, output_targets
+    
+    def solve_output_oriented_multiplier(self, dmu_index: int, epsilon: float = 1e-6) -> Tuple[float, np.ndarray, np.ndarray, float]:
+        """
+        Solve Output-Oriented BCC Multiplier Model (3.3.3)
+        
+        min sum(v_i * x_ip) + u0
+        s.t. -sum(v_i * x_ij) + sum(u_r * y_rj) + u0 <= 0, j=1,...,n
+             sum(u_r * y_rp) = 1
+             u_r >= epsilon, v_i >= epsilon
+             u0 free in sign
+        
+        Parameters:
+        -----------
+        dmu_index : int
+            Index of DMU under evaluation (0-based)
+        epsilon : float
+            Small positive value for non-Archimedean constraint
+        
+        Returns:
+        --------
+        efficiency : float
+            Efficiency score
+        v_weights : np.ndarray
+            Optimal input weights (v*)
+        u_weights : np.ndarray
+            Optimal output weights (u*)
+        u0 : float
+            Optimal u0 value
+        """
+        # Objective: minimize sum(v_i * x_ip) + u0
+        # Variables: [v_1, ..., v_m, u_1, ..., u_s, u0+, u0-]
+        c = np.zeros(self.n_inputs + self.n_outputs + 2)
+        c[:self.n_inputs] = self.inputs[dmu_index, :]
+        c[self.n_inputs + self.n_outputs] = 1.0  # u0+
+        c[self.n_inputs + self.n_outputs + 1] = -1.0  # -u0-
+        
+        # Constraints matrix
+        n_constraints = self.n_dmus + 1 + self.n_inputs + self.n_outputs + 2
+        A = np.zeros((n_constraints, self.n_inputs + self.n_outputs + 2))
+        
+        # DMU constraints
+        for j in range(self.n_dmus):
+            A[j, :self.n_inputs] = -self.inputs[j, :]
+            A[j, self.n_inputs:self.n_inputs + self.n_outputs] = self.outputs[j, :]
+            A[j, self.n_inputs + self.n_outputs] = 1.0  # u0+
+            A[j, self.n_inputs + self.n_outputs + 1] = -1.0  # -u0-
+        
+        # Normalization constraint: sum(u_r * y_rp) = 1
+        A[self.n_dmus, self.n_inputs:self.n_inputs + self.n_outputs] = self.outputs[dmu_index, :]
+        
+        # Epsilon constraints
+        for i in range(self.n_inputs):
+            A[self.n_dmus + 1 + i, i] = -1.0
+        for r in range(self.n_outputs):
+            A[self.n_dmus + 1 + self.n_inputs + r, self.n_inputs + r] = -1.0
+        A[self.n_dmus + 1 + self.n_inputs + self.n_outputs, self.n_inputs + self.n_outputs] = -1.0
+        A[self.n_dmus + 1 + self.n_inputs + self.n_outputs + 1, self.n_inputs + self.n_outputs + 1] = -1.0
+        
+        # Right-hand side
+        b = np.zeros(n_constraints)
+        b[self.n_dmus] = 1.0
+        for i in range(self.n_inputs):
+            b[self.n_dmus + 1 + i] = -epsilon
+        for r in range(self.n_outputs):
+            b[self.n_dmus + 1 + self.n_inputs + r] = -epsilon
+        b[self.n_dmus + 1 + self.n_inputs + self.n_outputs] = -epsilon
+        b[self.n_dmus + 1 + self.n_inputs + self.n_outputs + 1] = -epsilon
+        
+        # Constraint types
+        A_eq = A[self.n_dmus:self.n_dmus+1, :]
+        b_eq = b[self.n_dmus:self.n_dmus+1]
+        A_ub = np.vstack([A[:self.n_dmus, :], A[self.n_dmus+1:, :]])
+        b_ub = np.hstack([b[:self.n_dmus], b[self.n_dmus+1:]])
+        
+        # Bounds
+        bounds = [(0, None)] * (self.n_inputs + self.n_outputs + 2)
+        
+        # Solve
+        result = linprog(c, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq,
+                        bounds=bounds, method='highs')
+        
+        if not result.success:
+            raise RuntimeError(f"Optimization failed for DMU {dmu_index}: {result.message}")
+        
+        efficiency = result.fun
+        v_weights = result.x[:self.n_inputs]
+        u_weights = result.x[self.n_inputs:self.n_inputs + self.n_outputs]
+        u0_plus = result.x[self.n_inputs + self.n_outputs]
+        u0_minus = result.x[self.n_inputs + self.n_outputs + 1]
+        u0 = u0_plus - u0_minus
+        
+        return efficiency, v_weights, u_weights, u0
 

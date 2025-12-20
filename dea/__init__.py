@@ -9,7 +9,14 @@ from .ccr import CCRModel
 from .bcc import BCCModel
 from .ap import APModel
 from .maj import MAJModel
+from .additive import AdditiveModel
+from .twophase import TwoPhaseModel
+from .advanced import CongestionModel, CommonWeightsModel, DirectionalEfficiencyModel
 
 __version__ = "1.0.0"
-__all__ = ["CCRModel", "BCCModel", "APModel", "MAJModel"]
+__all__ = [
+    "CCRModel", "BCCModel", "APModel", "MAJModel",
+    "AdditiveModel", "TwoPhaseModel",
+    "CongestionModel", "CommonWeightsModel", "DirectionalEfficiencyModel"
+]
 

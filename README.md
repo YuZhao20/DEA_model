@@ -13,10 +13,21 @@ Data Envelopment Analysis (DEA) implementation in Python based on Hosseinzadeh L
 #### CCR (Charnes-Cooper-Rhodes) モデル
 - **Input-Oriented CCR Envelopment Model** (3.2.1)
 - **Input-Oriented CCR Multiplier Model** (3.2.2)
+- **Output-Oriented CCR Envelopment Model** (3.3.1)
+- **Output-Oriented CCR Multiplier Model** (3.3.2)
 
 #### BCC (Banker-Charnes-Cooper) モデル
-- **Input-Oriented BCC Envelopment Model** (3.2.3)
+- **Input-Oriented BCC Envelopment Model** (3.2.4)
 - **Input-Oriented BCC Multiplier Model** (3.2.3)
+- **Output-Oriented BCC Envelopment Model** (3.3.4)
+- **Output-Oriented BCC Multiplier Model** (3.3.3)
+
+#### Additive Models
+- **Additive CCR Model** (3.4.1)
+- **Additive BCC Model** (3.4.2)
+
+#### Two-Phase Models
+- **Two-Phase Input-Oriented BCC Envelopment Model** (3.6.1)
 
 ### 第4章: Advanced DEA Models
 
@@ -28,6 +39,11 @@ Data Envelopment Analysis (DEA) implementation in Python based on Hosseinzadeh L
 
 #### MAJ Super-Efficiency Model
 - **MAJ Super-Efficiency Model** (4.3)
+
+#### Other Advanced Models
+- **Congestion DEA Model** (4.13)
+- **Common Set of Weights DEA Model** (4.14)
+- **Directional Efficiency DEA Model** (4.15)
 
 ## インストール
 
@@ -41,7 +57,11 @@ pip install -r requirements.txt
 
 ```python
 import numpy as np
-from dea import CCRModel, BCCModel, APModel, MAJModel
+from dea import (
+    CCRModel, BCCModel, APModel, MAJModel,
+    AdditiveModel, TwoPhaseModel,
+    CongestionModel, CommonWeightsModel, DirectionalEfficiencyModel
+)
 
 # データの準備（入力と出力）
 inputs = np.array([
