@@ -897,7 +897,7 @@ elif page == "結果の可視化":
         # Check if results is a DataFrame
         if not isinstance(results, pd.DataFrame):
             st.error("結果がDataFrame形式ではありません。分析を再実行してください。")
-else:
+        else:
             # Efficiency score visualization
             eff_cols = [col for col in results.columns if 'Efficiency' in col or 'efficiency' in col.lower()]
             eff_col = None
