@@ -28,7 +28,9 @@ class SBMModel:
         """
         Solve First Model of SBM (4.9.1)
         
-        Linearized SBM model where numerator is minimized
+        Linearized SBM model using Charnes-Cooper transformation
+        Variables: [t, Lambda_1, ..., Lambda_n, S_1^-, ..., S_m^-, S_1^+, ..., S_s^+]
+        where Lambda = t * lambda, S^- = t * s^-, S^+ = t * s^+
         
         Parameters:
         -----------
@@ -37,10 +39,10 @@ class SBMModel:
         rts : str
             Returns to scale: 'crs', 'vrs', 'drs', 'irs' (default: 'vrs')
         """
-        # Variables: [t, lambda_1, ..., lambda_n, s_1^-, ..., s_m^-, s_1^+, ..., s_s^+]
+        # Variables: [t, Lambda_1, ..., Lambda_n, S_1^-, ..., S_m^-, S_1^+, ..., S_s^+]
         n_vars = 1 + self.n_dmus + self.n_inputs + self.n_outputs
         c = np.zeros(n_vars)
-        c[0] = 1.0  # minimize t
+        c[0] = 1.0  # minimize t (which represents the numerator)
         
         # Constraints: 1 (normalization) + m (inputs) + s (outputs) + 1 (RTS if VRS)
         n_eq_constraints = 1 + self.n_inputs + self.n_outputs
@@ -51,20 +53,22 @@ class SBMModel:
         A_ub = np.zeros((self.n_inputs + self.n_outputs, n_vars))
         
         row = 0
-        # Constraint: t - (1/m) * sum(s_i^- / x_ip) = 1
+        # Normalization constraint: t + (1/s) * sum(S_r^+ / y_rp) = 1
+        # This ensures the denominator is normalized to 1
         A_eq[row, 0] = 1.0
-        for i in range(self.n_inputs):
-            A_eq[row, 1 + self.n_dmus + i] = -1.0 / (self.n_inputs * self.inputs[dmu_index, i])
+        for r in range(self.n_outputs):
+            if self.outputs[dmu_index, r] > 0:
+                A_eq[row, 1 + self.n_dmus + self.n_inputs + r] = 1.0 / (self.n_outputs * self.outputs[dmu_index, r])
         row += 1
         
-        # Input constraints: sum(lambda_j * x_ij) + s_i^- = t * x_ip
+        # Input constraints: sum(Lambda_j * x_ij) + S_i^- = t * x_ip
         for i in range(self.n_inputs):
             A_eq[row, 0] = -self.inputs[dmu_index, i]
             A_eq[row, 1:1 + self.n_dmus] = self.inputs[:, i]
             A_eq[row, 1 + self.n_dmus + i] = 1.0
             row += 1
         
-        # Output constraints: sum(lambda_j * y_rj) - s_r^+ = t * y_rp
+        # Output constraints: sum(Lambda_j * y_rj) - S_r^+ = t * y_rp
         for r in range(self.n_outputs):
             A_eq[row, 1:1 + self.n_dmus] = self.outputs[:, r]
             A_eq[row, 1 + self.n_dmus + self.n_inputs + r] = -1.0
@@ -73,23 +77,26 @@ class SBMModel:
         
         # RTS constraint
         if rts == 'vrs':
-            # sum(lambda_j) = 1
+            # sum(Lambda_j) = t
             A_eq[row, 1:1 + self.n_dmus] = 1.0
+            A_eq[row, 0] = -1.0
             row += 1
         elif rts == 'drs':
-            # sum(lambda_j) <= 1
+            # sum(Lambda_j) <= t
             A_ub = np.vstack([A_ub, np.zeros((1, n_vars))])
             A_ub[-1, 1:1 + self.n_dmus] = 1.0
+            A_ub[-1, 0] = -1.0
         elif rts == 'irs':
-            # sum(lambda_j) >= 1
+            # sum(Lambda_j) >= t
             A_ub = np.vstack([A_ub, np.zeros((1, n_vars))])
             A_ub[-1, 1:1 + self.n_dmus] = -1.0
+            A_ub[-1, 0] = 1.0
         # crs: no constraint on sum of lambdas
         
         b_eq = np.zeros(n_eq_constraints)
-        b_eq[0] = 1.0
+        b_eq[0] = 1.0  # normalization constraint
         if rts == 'vrs':
-            b_eq[-1] = 1.0
+            b_eq[-1] = 0.0  # sum(Lambda_j) = t
         
         # Non-negativity constraints
         for i in range(self.n_inputs):
@@ -108,11 +115,21 @@ class SBMModel:
             raise RuntimeError(f"Optimization failed for DMU {dmu_index}: {result.message}")
         
         t = result.x[0]
-        lambdas = result.x[1:1 + self.n_dmus]
-        input_slacks = result.x[1 + self.n_dmus:1 + self.n_dmus + self.n_inputs]
-        output_slacks = result.x[1 + self.n_dmus + self.n_inputs:]
+        Lambda = result.x[1:1 + self.n_dmus]
+        S_minus = result.x[1 + self.n_dmus:1 + self.n_dmus + self.n_inputs]
+        S_plus = result.x[1 + self.n_dmus + self.n_inputs:]
         
-        # SBM efficiency = t
+        # Convert back to original variables
+        if t > 1e-10:
+            lambdas = Lambda / t
+            input_slacks = S_minus / t
+            output_slacks = S_plus / t
+        else:
+            lambdas = Lambda
+            input_slacks = S_minus
+            output_slacks = S_plus
+        
+        # SBM efficiency = t (since denominator is normalized to 1)
         sbm_eff = t
         
         return sbm_eff, lambdas, input_slacks, output_slacks
@@ -121,7 +138,9 @@ class SBMModel:
         """
         Solve Second Model of SBM (4.9.2)
         
-        Linearized SBM model where denominator is maximized
+        Linearized SBM model using Charnes-Cooper transformation
+        Variables: [t, Lambda_1, ..., Lambda_n, S_1^-, ..., S_m^-, S_1^+, ..., S_s^+]
+        where Lambda = t * lambda, S^- = t * s^-, S^+ = t * s^+
         
         Parameters:
         -----------
@@ -130,10 +149,10 @@ class SBMModel:
         rts : str
             Returns to scale: 'crs', 'vrs', 'drs', 'irs' (default: 'vrs')
         """
-        # Variables: [t, lambda_1, ..., lambda_n, s_1^-, ..., s_m^-, s_1^+, ..., s_s^+]
+        # Variables: [t, Lambda_1, ..., Lambda_n, S_1^-, ..., S_m^-, S_1^+, ..., S_s^+]
         n_vars = 1 + self.n_dmus + self.n_inputs + self.n_outputs
         c = np.zeros(n_vars)
-        c[0] = -1.0  # maximize t (minimize -t)
+        c[0] = -1.0  # maximize t (minimize -t), which represents the denominator
         
         # Constraints: 1 (normalization) + m (inputs) + s (outputs) + 1 (RTS if VRS)
         n_eq_constraints = 1 + self.n_inputs + self.n_outputs
@@ -144,20 +163,22 @@ class SBMModel:
         A_ub = np.zeros((self.n_inputs + self.n_outputs, n_vars))
         
         row = 0
-        # Constraint: t + (1/s) * sum(s_r^+ / y_rp) = 1
+        # Normalization constraint: t - (1/m) * sum(S_i^- / x_ip) = 1
+        # This ensures the numerator is normalized to 1
         A_eq[row, 0] = 1.0
-        for r in range(self.n_outputs):
-            A_eq[row, 1 + self.n_dmus + self.n_inputs + r] = 1.0 / (self.n_outputs * self.outputs[dmu_index, r])
+        for i in range(self.n_inputs):
+            if self.inputs[dmu_index, i] > 0:
+                A_eq[row, 1 + self.n_dmus + i] = -1.0 / (self.n_inputs * self.inputs[dmu_index, i])
         row += 1
         
-        # Input constraints: sum(lambda_j * x_ij) + s_i^- = t * x_ip
+        # Input constraints: sum(Lambda_j * x_ij) + S_i^- = t * x_ip
         for i in range(self.n_inputs):
             A_eq[row, 0] = -self.inputs[dmu_index, i]
             A_eq[row, 1:1 + self.n_dmus] = self.inputs[:, i]
             A_eq[row, 1 + self.n_dmus + i] = 1.0
             row += 1
         
-        # Output constraints: sum(lambda_j * y_rj) - s_r^+ = t * y_rp
+        # Output constraints: sum(Lambda_j * y_rj) - S_r^+ = t * y_rp
         for r in range(self.n_outputs):
             A_eq[row, 1:1 + self.n_dmus] = self.outputs[:, r]
             A_eq[row, 1 + self.n_dmus + self.n_inputs + r] = -1.0
@@ -166,25 +187,28 @@ class SBMModel:
         
         # RTS constraint
         if rts == 'vrs':
-            # sum(lambda_j) = 1
+            # sum(Lambda_j) = t
             A_eq[row, 1:1 + self.n_dmus] = 1.0
+            A_eq[row, 0] = -1.0
             row += 1
         elif rts == 'drs':
-            # sum(lambda_j) <= 1
+            # sum(Lambda_j) <= t
             A_ub = np.vstack([A_ub, np.zeros((1, n_vars))])
             A_ub[-1, 1:1 + self.n_dmus] = 1.0
+            A_ub[-1, 0] = -1.0
         elif rts == 'irs':
-            # sum(lambda_j) >= 1
+            # sum(Lambda_j) >= t
             A_ub = np.vstack([A_ub, np.zeros((1, n_vars))])
             A_ub[-1, 1:1 + self.n_dmus] = -1.0
+            A_ub[-1, 0] = 1.0
         # crs: no constraint on sum of lambdas
         
         b_eq = np.zeros(n_eq_constraints)
-        b_eq[0] = 1.0
+        b_eq[0] = 1.0  # normalization constraint
         if rts == 'vrs':
-            b_eq[-1] = 1.0
+            b_eq[-1] = 0.0  # sum(Lambda_j) = t
         
-        # Non-negativity
+        # Non-negativity constraints
         for i in range(self.n_inputs):
             A_ub[i, 1 + self.n_dmus + i] = -1.0
         for r in range(self.n_outputs):
@@ -201,12 +225,25 @@ class SBMModel:
             raise RuntimeError(f"Optimization failed for DMU {dmu_index}: {result.message}")
         
         t = result.x[0]
-        lambdas = result.x[1:1 + self.n_dmus]
-        input_slacks = result.x[1 + self.n_dmus:1 + self.n_dmus + self.n_inputs]
-        output_slacks = result.x[1 + self.n_dmus + self.n_inputs:]
+        Lambda = result.x[1:1 + self.n_dmus]
+        S_minus = result.x[1 + self.n_dmus:1 + self.n_dmus + self.n_inputs]
+        S_plus = result.x[1 + self.n_dmus + self.n_inputs:]
         
-        # SBM efficiency = t (since we minimized -t, t = -result.fun)
-        sbm_eff = t
+        # Convert back to original variables
+        if t > 1e-10:
+            lambdas = Lambda / t
+            input_slacks = S_minus / t
+            output_slacks = S_plus / t
+        else:
+            lambdas = Lambda
+            input_slacks = S_minus
+            output_slacks = S_plus
+        
+        # SBM efficiency = 1 / t (since numerator is normalized to 1)
+        if t > 1e-10:
+            sbm_eff = 1.0 / t
+        else:
+            sbm_eff = 0.0
         
         return sbm_eff, lambdas, input_slacks, output_slacks
     
