@@ -140,19 +140,63 @@ if uploaded_file is not None:
 
         # Sample data generator
         st.subheader("サンプルデータの生成")
-        if st.button("サンプルデータを生成"):
-            np.random.seed(42)
-            n_dmus = 10
-            n_inputs = 2
-            n_outputs = 2
+        
+        # Sample data templates
+        sample_templates = {
+            "基本データセット（小規模）": {"n_dmus": 10, "n_inputs": 2, "n_outputs": 2, "seed": 42},
+            "基本データセット（中規模）": {"n_dmus": 20, "n_inputs": 3, "n_outputs": 2, "seed": 42},
+            "基本データセット（大規模）": {"n_dmus": 30, "n_inputs": 3, "n_outputs": 3, "seed": 42},
+            "StoNED用（単一出力）": {"n_dmus": 15, "n_inputs": 2, "n_outputs": 1, "seed": 42},
+            "複数入力・出力": {"n_dmus": 25, "n_inputs": 4, "n_outputs": 3, "seed": 42},
+            "時系列データ（Malmquist用）": {"n_dmus": 20, "n_inputs": 2, "n_outputs": 2, "seed": 42, "time_periods": True}
+        }
+        
+        selected_template = st.selectbox(
+            "サンプルデータテンプレートを選択",
+            list(sample_templates.keys())
+        )
+        
+        template = sample_templates[selected_template]
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            n_dmus = st.number_input("DMU数", min_value=5, max_value=100, value=template["n_dmus"], step=5)
+        with col2:
+            n_inputs = st.number_input("入力変数数", min_value=1, max_value=10, value=template["n_inputs"], step=1)
+        with col3:
+            n_outputs = st.number_input("出力変数数", min_value=1, max_value=10, value=template["n_outputs"], step=1)
+        
+        if st.button("サンプルデータを生成", type="primary"):
+            np.random.seed(template["seed"])
+            
+            # Generate realistic DEA data
+            # Create efficient frontier first
+            base_efficiency = np.random.uniform(0.7, 1.0, n_dmus)
             
             sample_data = {
                 'DMU': [f'DMU_{i+1}' for i in range(n_dmus)],
             }
+            
+            # Generate inputs (vary with efficiency)
             for i in range(n_inputs):
-                sample_data[f'Input_{i+1}'] = np.random.uniform(1, 10, n_dmus)
+                # More efficient DMUs use fewer inputs
+                base_input = np.random.uniform(5, 15, n_dmus)
+                inputs = base_input / (base_efficiency + 0.1)  # Inverse relationship with efficiency
+                sample_data[f'Input_{i+1}'] = inputs
+            
+            # Generate outputs (vary with efficiency)
             for i in range(n_outputs):
-                sample_data[f'Output_{i+1}'] = np.random.uniform(1, 10, n_dmus)
+                # More efficient DMUs produce more outputs
+                base_output = np.random.uniform(3, 12, n_dmus)
+                outputs = base_output * (base_efficiency + 0.2)  # Positive relationship with efficiency
+                sample_data[f'Output_{i+1}'] = outputs
+            
+            # Add time periods for Malmquist if needed
+            if template.get("time_periods", False):
+                periods = np.tile([1, 2], n_dmus // 2)
+                if n_dmus % 2 == 1:
+                    periods = np.append(periods, 1)
+                sample_data['Period'] = periods
             
             df_sample = pd.DataFrame(sample_data)
             st.session_state.data = df_sample
@@ -160,8 +204,17 @@ if uploaded_file is not None:
             st.session_state.outputs = df_sample[[f'Output_{i+1}' for i in range(n_outputs)]].values
             st.session_state.dmu_names = df_sample['DMU'].values
             
-            st.success("サンプルデータを生成しました")
-            st.dataframe(df_sample)
+            st.success(f"サンプルデータを生成しました: {n_dmus} DMUs, {n_inputs} 入力, {n_outputs} 出力")
+            st.dataframe(df_sample, use_container_width=True)
+            
+            # Download sample data
+            csv_sample = df_sample.to_csv(index=False)
+            st.download_button(
+                label="サンプルデータをCSVでダウンロード",
+                data=csv_sample,
+                file_name=f"sample_data_{n_dmus}dmus_{n_inputs}inputs_{n_outputs}outputs.csv",
+                mime="text/csv"
+            )
 
 # Basic Models Page
 elif page == "基本モデル":
@@ -838,87 +891,91 @@ elif page == "結果の可視化":
     
     if st.session_state.results is None:
         st.warning("⚠️ まず他のページで分析を実行してください")
-else:
+    else:
         results = st.session_state.results
         
-        # Efficiency score visualization
-        eff_cols = [col for col in results.columns if 'Efficiency' in col or 'efficiency' in col.lower()]
-        if eff_cols:
-            eff_col = eff_cols[0]
-            
-            st.subheader("効率スコアの分布")
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                # Bar chart
-                fig_bar = px.bar(
-                    results,
-                    x='DMU',
-                    y=eff_col,
-                    title="効率スコア（バーチャート）",
-                    labels={eff_col: '効率スコア', 'DMU': 'DMU'}
-                )
-                fig_bar.update_layout(height=400)
-                st.plotly_chart(fig_bar, use_container_width=True)
-            
-            with col2:
-                # Histogram
-                fig_hist = px.histogram(
-                    results,
-                    x=eff_col,
-                    title="効率スコアの分布",
-                    labels={eff_col: '効率スコア', 'count': '頻度'},
-                    nbins=20
-                )
-                fig_hist.update_layout(height=400)
-                st.plotly_chart(fig_hist, use_container_width=True)
-            
-            # Summary statistics
-            st.subheader("統計サマリー")
-            summary_stats = results[eff_col].describe()
-            st.dataframe(summary_stats)
-        
-        # If we have input/output data, show scatter plots
-        if st.session_state.inputs is not None and st.session_state.outputs is not None:
-            st.subheader("入力・出力の関係")
-            
-            if st.session_state.inputs.shape[1] >= 1 and st.session_state.outputs.shape[1] >= 1:
-                # Create a combined dataframe
-                plot_df = pd.DataFrame({
-                    'Input1': st.session_state.inputs[:, 0],
-                    'Output1': st.session_state.outputs[:, 0],
-                    'DMU': range(1, len(st.session_state.inputs) + 1)
-                })
+        # Check if results is a DataFrame
+        if not isinstance(results, pd.DataFrame):
+            st.error("結果がDataFrame形式ではありません。分析を再実行してください。")
+else:
+            # Efficiency score visualization
+            eff_cols = [col for col in results.columns if 'Efficiency' in col or 'efficiency' in col.lower()]
+            if eff_cols:
+                eff_col = eff_cols[0]
                 
-                if st.session_state.inputs.shape[1] > 1:
-                    plot_df['Input2'] = st.session_state.inputs[:, 1]
+                st.subheader("効率スコアの分布")
                 
-                if eff_cols and eff_col in results.columns:
-                    plot_df['Efficiency'] = results[eff_col].values
+                col1, col2 = st.columns(2)
                 
-                # Scatter plot
-                if 'Efficiency' in plot_df.columns:
-                    fig_scatter = px.scatter(
-                        plot_df,
-                        x='Input1',
-                        y='Output1',
-                        size='Efficiency',
-                        color='Efficiency',
-                        hover_data=['DMU'],
-                        title="入力と出力の関係（効率スコアで色分け）",
-                        labels={'Input1': '入力1', 'Output1': '出力1', 'Efficiency': '効率'}
+                with col1:
+                    # Bar chart
+                    fig_bar = px.bar(
+                        results,
+                        x='DMU',
+                        y=eff_col,
+                        title="効率スコア（バーチャート）",
+                        labels={eff_col: '効率スコア', 'DMU': 'DMU'}
                     )
-                else:
-                    fig_scatter = px.scatter(
-                        plot_df,
-                        x='Input1',
-                        y='Output1',
-                        hover_data=['DMU'],
-                        title="入力と出力の関係",
-                        labels={'Input1': '入力1', 'Output1': '出力1'}
+                    fig_bar.update_layout(height=400)
+                    st.plotly_chart(fig_bar, use_container_width=True)
+                
+                with col2:
+                    # Histogram
+                    fig_hist = px.histogram(
+                        results,
+                        x=eff_col,
+                        title="効率スコアの分布",
+                        labels={eff_col: '効率スコア', 'count': '頻度'},
+                        nbins=20
                     )
-                st.plotly_chart(fig_scatter, use_container_width=True)
+                    fig_hist.update_layout(height=400)
+                    st.plotly_chart(fig_hist, use_container_width=True)
+                
+                # Summary statistics
+                st.subheader("統計サマリー")
+                summary_stats = results[eff_col].describe()
+                st.dataframe(summary_stats)
+            
+            # If we have input/output data, show scatter plots
+            if st.session_state.inputs is not None and st.session_state.outputs is not None:
+                st.subheader("入力・出力の関係")
+                
+                if st.session_state.inputs.shape[1] >= 1 and st.session_state.outputs.shape[1] >= 1:
+                    # Create a combined dataframe
+                    plot_df = pd.DataFrame({
+                        'Input1': st.session_state.inputs[:, 0],
+                        'Output1': st.session_state.outputs[:, 0],
+                        'DMU': range(1, len(st.session_state.inputs) + 1)
+                    })
+                    
+                    if st.session_state.inputs.shape[1] > 1:
+                        plot_df['Input2'] = st.session_state.inputs[:, 1]
+                    
+                    if eff_cols and len(eff_cols) > 0 and eff_cols[0] in results.columns:
+                        plot_df['Efficiency'] = results[eff_cols[0]].values
+                    
+                    # Scatter plot
+                    if 'Efficiency' in plot_df.columns:
+                        fig_scatter = px.scatter(
+                            plot_df,
+                            x='Input1',
+                            y='Output1',
+                            size='Efficiency',
+                            color='Efficiency',
+                            hover_data=['DMU'],
+                            title="入力と出力の関係（効率スコアで色分け）",
+                            labels={'Input1': '入力1', 'Output1': '出力1', 'Efficiency': '効率'}
+                        )
+                    else:
+                        fig_scatter = px.scatter(
+                            plot_df,
+                            x='Input1',
+                            y='Output1',
+                            hover_data=['DMU'],
+                            title="入力と出力の関係",
+                            labels={'Input1': '入力1', 'Output1': '出力1'}
+                        )
+                    st.plotly_chart(fig_scatter, use_container_width=True)
 
 # Footer
 st.sidebar.markdown("---")
