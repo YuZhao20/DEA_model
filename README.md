@@ -28,6 +28,7 @@ Data Envelopment Analysis (DEA) implementation in Python based on Hosseinzadeh L
 
 #### Two-Phase Models
 - **Two-Phase Input-Oriented BCC Envelopment Model** (3.6.1)
+- **Two-Phase Input-Oriented CCR Envelopment Model** (3.6.2)
 
 ### 第4章: Advanced DEA Models
 
@@ -63,6 +64,9 @@ Data Envelopment Analysis (DEA) implementation in Python based on Hosseinzadeh L
 - **Input-Oriented Modified SBM Model** (4.12.1)
 - **Output-Oriented Modified SBM Model** (4.12.2)
 
+#### Network DEA Models
+- **Series Network DEA Model** (4.10)
+
 #### Other Advanced Models
 - **Congestion DEA Model** (4.13)
 - **Common Set of Weights DEA Model** (4.14)
@@ -88,6 +92,7 @@ from dea import (
     CostEfficiencyModel, RevenueEfficiencyModel,
     MalmquistModel, SBMModel,
     ProfitEfficiencyModel, ModifiedSBMModel,
+    SeriesNetworkModel,
     CongestionModel, CommonWeightsModel, DirectionalEfficiencyModel
 )
 

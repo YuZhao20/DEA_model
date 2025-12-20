@@ -11,7 +11,7 @@ import pandas as pd
 
 class TwoPhaseModel:
     """
-    Two-Phase Input-Oriented BCC Envelopment Model
+    Two-Phase Input-Oriented DEA Envelopment Models
     
     Phase 1: Find efficiency score
     Phase 2: Maximize slacks given the efficiency score from Phase 1
@@ -167,6 +167,115 @@ class TwoPhaseModel:
         
         for j in range(self.n_dmus):
             eff, lambdas, input_slacks, output_slacks, sum_slacks = self.solve(j)
+            
+            result_dict = {
+                'DMU': j + 1,
+                'Efficiency': eff,
+                'Sum_Slacks': sum_slacks
+            }
+            for i, lam in enumerate(lambdas):
+                result_dict[f'Lambda_{i+1}'] = lam
+            for i in range(self.n_inputs):
+                result_dict[f'S-_{i+1}'] = input_slacks[i]
+            for r in range(self.n_outputs):
+                result_dict[f'S+_{r+1}'] = output_slacks[r]
+            
+            results.append(result_dict)
+        
+        return pd.DataFrame(results)
+    
+    def solve_ccr(self, dmu_index: int) -> Tuple[float, np.ndarray, np.ndarray, np.ndarray, float]:
+        """
+        Solve Two-Phase Input-Oriented CCR Envelopment Model (3.6.2)
+        
+        Phase 1:
+        min h
+        s.t. -h*x_ip + sum(lambda_j * x_ij) >= 0, i=1,...,m
+             sum(lambda_j * y_rj) >= y_rp, r=1,...,s
+             lambda_j >= 0
+        
+        Phase 2:
+        max sum(s_i^-) + sum(s_r^+)
+        s.t. sum(lambda_j * x_ij) + s_i^- = h*x_ip, i=1,...,m
+             sum(lambda_j * y_rj) - s_r^+ = y_rp, r=1,...,s
+             lambda_j >= 0, s_i^- >= 0, s_r^+ >= 0
+        
+        Parameters:
+        -----------
+        dmu_index : int
+            Index of DMU under evaluation (0-based)
+        
+        Returns:
+        --------
+        efficiency : float
+            Efficiency score from Phase 1 (h*)
+        lambdas : np.ndarray
+            Optimal intensity variables from Phase 2
+        input_slacks : np.ndarray
+            Optimal input slacks from Phase 2
+        output_slacks : np.ndarray
+            Optimal output slacks from Phase 2
+        sum_slacks : float
+            Sum of optimal slacks from Phase 2
+        """
+        from .ccr import CCRModel
+        
+        # Phase 1: Solve CCR envelopment model
+        ccr = CCRModel(self.inputs, self.outputs)
+        efficiency, _, _, _ = ccr.solve_envelopment(dmu_index)
+        
+        # Phase 2: Maximize slacks given efficiency from Phase 1
+        n_vars2 = self.n_dmus + self.n_inputs + self.n_outputs
+        c2 = np.zeros(n_vars2)
+        c2[self.n_dmus:self.n_dmus + self.n_inputs] = 1.0  # input slacks
+        c2[self.n_dmus + self.n_inputs:] = 1.0  # output slacks
+        
+        n_constraints2 = self.n_inputs + self.n_outputs
+        A2_eq = np.zeros((n_constraints2, n_vars2))
+        
+        # Input constraints: sum(lambda_j * x_ij) + s_i^- = h*x_ip
+        for i in range(self.n_inputs):
+            A2_eq[i, :self.n_dmus] = self.inputs[:, i]
+            A2_eq[i, self.n_dmus + i] = 1.0
+        
+        # Output constraints: sum(lambda_j * y_rj) - s_r^+ = y_rp
+        for r in range(self.n_outputs):
+            A2_eq[self.n_inputs + r, :self.n_dmus] = self.outputs[:, r]
+            A2_eq[self.n_inputs + r, self.n_dmus + self.n_inputs + r] = -1.0
+        
+        b2_eq = np.zeros(n_constraints2)
+        for i in range(self.n_inputs):
+            b2_eq[i] = efficiency * self.inputs[dmu_index, i]
+        for r in range(self.n_outputs):
+            b2_eq[self.n_inputs + r] = self.outputs[dmu_index, r]
+        
+        bounds2 = [(0, None)] * n_vars2
+        
+        result2 = linprog(-c2, A_eq=A2_eq, b_eq=b2_eq, bounds=bounds2, method='highs')
+        
+        if not result2.success:
+            raise RuntimeError(f"Phase 2 optimization failed for DMU {dmu_index}: {result2.message}")
+        
+        lambdas = result2.x[:self.n_dmus]
+        input_slacks = result2.x[self.n_dmus:self.n_dmus + self.n_inputs]
+        output_slacks = result2.x[self.n_dmus + self.n_inputs:]
+        sum_slacks = -result2.fun
+        
+        return efficiency, lambdas, input_slacks, output_slacks, sum_slacks
+    
+    def evaluate_all_ccr(self) -> pd.DataFrame:
+        """
+        Evaluate all DMUs using Two-Phase CCR model
+        
+        Returns:
+        --------
+        results : pd.DataFrame
+            DataFrame with results
+        """
+        results = []
+        
+        for j in range(self.n_dmus):
+            eff, lambdas, input_slacks, output_slacks, sum_slacks = self.solve_ccr(j)
             
             result_dict = {
                 'DMU': j + 1,

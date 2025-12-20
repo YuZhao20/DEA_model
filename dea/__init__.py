@@ -19,6 +19,7 @@ from .cost_revenue import CostEfficiencyModel, RevenueEfficiencyModel
 from .malmquist import MalmquistModel
 from .sbm import SBMModel
 from .profit_network import ProfitEfficiencyModel, ModifiedSBMModel
+from .network import SeriesNetworkModel
 
 __version__ = "1.0.0"
 __all__ = [
@@ -29,6 +30,7 @@ __all__ = [
     "CostEfficiencyModel", "RevenueEfficiencyModel",
     "MalmquistModel",
     "SBMModel",
-    "ProfitEfficiencyModel", "ModifiedSBMModel"
+    "ProfitEfficiencyModel", "ModifiedSBMModel",
+    "SeriesNetworkModel"
 ]
 
