@@ -10,17 +10,28 @@ import plotly.express as px
 import plotly.graph_objects as go
 from io import StringIO
 
-# Import DEA models
+# Import all DEA models
 from dea import (
     CCRModel, BCCModel, APModel, MAJModel,
     AdditiveModel, TwoPhaseModel,
+    NormL1Model, CongestionModel, CommonWeightsModel, DirectionalEfficiencyModel,
+    ReturnsToScaleModel,
     CostEfficiencyModel, RevenueEfficiencyModel,
-    SBMModel, DirectionalEfficiencyModel,
-    DRSModel, IRSModel, FDHModel,
-    MEAModel, CrossEfficiencyModel,
+    MalmquistModel,
+    SBMModel,
+    ProfitEfficiencyModel, ModifiedSBMModel,
+    SeriesNetworkModel,
+    DRSModel, IRSModel,
+    FDHModel, FDHPlusModel,
+    MEAModel,
+    EfficiencyLadderModel,
+    MergerAnalysisModel,
+    BootstrapDEAModel,
     NonRadialModel, LGOModel, RDMModel,
     AddMinModel, AddSuperEffModel, DEAPSModel,
-    transform_undesirable
+    CrossEfficiencyModel,
+    transform_undesirable,
+    StoNEDModel
 )
 
 # Page configuration
@@ -39,7 +50,7 @@ st.markdown("Data Envelopment Analysis (DEA) モデルのインタラクティ�
 st.sidebar.title("ナビゲーション")
 page = st.sidebar.selectbox(
     "ページを選択",
-    ["データアップロード", "基本モデル", "高度なモデル", "追加モデル", "結果の可視化"]
+    ["データアップロード", "基本モデル", "高度なモデル", "追加モデル", "特殊モデル", "結果の可視化"]
 )
 
 # Initialize session state
@@ -51,6 +62,8 @@ if 'outputs' not in st.session_state:
     st.session_state.outputs = None
 if 'results' not in st.session_state:
     st.session_state.results = None
+if 'dmu_names' not in st.session_state:
+    st.session_state.dmu_names = None
 
 # Data Upload Page
 if page == "データアップロード":
@@ -87,18 +100,31 @@ if uploaded_file is not None:
             st.subheader("列の選択")
             all_columns = df.columns.tolist()
             
+            # DMU name column (optional)
+            dmu_col = st.selectbox(
+                "DMU名の列（オプション）",
+                ["なし"] + all_columns,
+                index=0
+            )
+            if dmu_col != "なし":
+                st.session_state.dmu_names = df[dmu_col].values
+                remaining_cols = [col for col in all_columns if col != dmu_col]
+            else:
+                st.session_state.dmu_names = None
+                remaining_cols = all_columns
+            
             # Input columns
             input_cols = st.multiselect(
                 "入力変数を選択",
-                all_columns,
-                default=all_columns[1:len(all_columns)//2+1] if len(all_columns) > 2 else all_columns[1:]
+                remaining_cols,
+                default=remaining_cols[:len(remaining_cols)//2] if len(remaining_cols) > 2 else remaining_cols[:1]
             )
             
             # Output columns
             output_cols = st.multiselect(
                 "出力変数を選択",
-                [col for col in all_columns if col not in input_cols],
-                default=[col for col in all_columns if col not in input_cols][:len(all_columns)//2]
+                [col for col in remaining_cols if col not in input_cols],
+                default=[col for col in remaining_cols if col not in input_cols][:len(remaining_cols)//2]
             )
             
             if st.button("データを設定", type="primary"):
@@ -132,6 +158,7 @@ if uploaded_file is not None:
         st.session_state.data = df_sample
         st.session_state.inputs = df_sample[[f'Input_{i+1}' for i in range(n_inputs)]].values
         st.session_state.outputs = df_sample[[f'Output_{i+1}' for i in range(n_outputs)]].values
+        st.session_state.dmu_names = df_sample['DMU'].values
         
         st.success("サンプルデータを生成しました")
         st.dataframe(df_sample)
@@ -152,6 +179,7 @@ elif page == "基本モデル":
         method = st.selectbox("方法", ["包絡モデル", "乗数モデル"], index=0)
         
         # Additive model type selection
+        model_type_add = "CCR"
         if model_type == "Additive":
             model_type_add = st.selectbox("Additiveタイプ", ["CCR", "BCC"], index=0)
         
@@ -242,7 +270,8 @@ elif page == "高度なモデル":
         model_type = st.selectbox(
             "モデルを選択",
             ["AP (Super-Efficiency)", "MAJ (Super-Efficiency)", "SBM", "Cost Efficiency", 
-             "Revenue Efficiency", "Directional Efficiency"]
+             "Revenue Efficiency", "Directional Efficiency", "Norm L1", "Congestion",
+             "Common Weights", "Returns to Scale"]
         )
         
         # Initialize variables
@@ -371,6 +400,30 @@ elif page == "高度なモデル":
                             st.error("方向ベクトルを正しく設定してください")
                             results = None
                     
+                    elif model_type == "Norm L1":
+                        model = NormL1Model(st.session_state.inputs, st.session_state.outputs)
+                        results = model.evaluate_all()
+                    
+                    elif model_type == "Congestion":
+                        model = CongestionModel(st.session_state.inputs, st.session_state.outputs)
+                        results_list = []
+                        for i in range(len(st.session_state.inputs)):
+                            congestion, lambdas, input_slacks, output_slacks = model.solve(i)
+                            results_list.append({
+                                'DMU': i+1,
+                                'Congestion': congestion,
+                                **{f'Lambda_{j+1}': lambdas[j] for j in range(len(lambdas))}
+                            })
+                        results = pd.DataFrame(results_list)
+                    
+                    elif model_type == "Common Weights":
+                        model = CommonWeightsModel(st.session_state.inputs, st.session_state.outputs)
+                        results = model.evaluate_all()
+                    
+                    elif model_type == "Returns to Scale":
+                        model = ReturnsToScaleModel(st.session_state.inputs, st.session_state.outputs)
+                        results = model.evaluate_all()
+                    
                     if results is not None:
                         st.session_state.results = results
                         st.success("分析が完了しました！")
@@ -401,7 +454,7 @@ elif page == "追加モデル":
     else:
         model_type = st.selectbox(
             "モデルを選択",
-            ["DRS", "IRS", "FDH", "MEA", "Cross Efficiency", "Non-Radial", "LGO", "RDM"]
+            ["DRS", "IRS", "FDH", "FDH+", "MEA", "Cross Efficiency", "Non-Radial", "LGO", "RDM"]
         )
         
         rts = st.selectbox("規模の収穫", ["vrs", "drs", "crs", "irs"], index=0)
@@ -428,7 +481,14 @@ elif page == "追加モデル":
                         model = FDHModel(st.session_state.inputs, st.session_state.outputs)
                         if orientation == "入力指向":
                             results = model.evaluate_all(orientation='input')
-        else:
+                        else:
+                            results = model.evaluate_all(orientation='output')
+                    
+                    elif model_type == "FDH+":
+                        model = FDHPlusModel(st.session_state.inputs, st.session_state.outputs)
+                        if orientation == "入力指向":
+                            results = model.evaluate_all(orientation='input')
+                        else:
                             results = model.evaluate_all(orientation='output')
                     
                     elif model_type == "MEA":
@@ -518,18 +578,198 @@ elif page == "追加モデル":
                 mime="text/csv"
             )
 
+# Special Models Page
+elif page == "特殊モデル":
+    st.header("🔹 特殊DEAモデル")
+    
+    if st.session_state.inputs is None or st.session_state.outputs is None:
+        st.warning("⚠️ まず「データアップロード」ページでデータを設定してください")
+    else:
+        model_type = st.selectbox(
+            "モデルを選択",
+            ["Profit Efficiency", "Modified SBM", "Series Network", "Malmquist",
+             "Efficiency Ladder", "Merger Analysis", "Bootstrap DEA",
+             "Add Min", "Add Super-Eff", "DEA-PS", "StoNED"]
+        )
+        
+        rts = st.selectbox("規模の収穫", ["vrs", "drs", "crs", "irs"], index=0)
+        orientation = st.selectbox("方向", ["入力指向", "出力指向"], index=0)
+        
+        # Special parameters
+        input_prices = None
+        output_prices = None
+        network_stages = 2
+        
+        if model_type == "Profit Efficiency":
+            st.subheader("価格の設定")
+            input_price_str = st.text_input(
+                "入力価格（カンマ区切り）",
+                value=",".join(["1"] * st.session_state.inputs.shape[1])
+            )
+            output_price_str = st.text_input(
+                "出力価格（カンマ区切り）",
+                value=",".join(["1"] * st.session_state.outputs.shape[1])
+            )
+            try:
+                input_prices = np.array([float(x.strip()) for x in input_price_str.split(",")])
+                output_prices = np.array([float(x.strip()) for x in output_price_str.split(",")])
+                if len(input_prices) != st.session_state.inputs.shape[1] or len(output_prices) != st.session_state.outputs.shape[1]:
+                    st.error("価格の数が変数の数と一致しません")
+                    input_prices = None
+                    output_prices = None
+            except:
+                st.error("価格の形式が正しくありません")
+                input_prices = None
+                output_prices = None
+        
+        if model_type == "Series Network":
+            network_stages = st.number_input("ネットワーク段階数", min_value=2, max_value=10, value=2, step=1)
+        
+        if st.button("分析を実行", type="primary"):
+            try:
+                with st.spinner("計算中..."):
+                    if model_type == "Profit Efficiency":
+                        if input_prices is not None and output_prices is not None:
+                            model = ProfitEfficiencyModel(
+                                st.session_state.inputs, st.session_state.outputs,
+                                input_prices, output_prices
+                            )
+                            results = model.evaluate_all()
+                        else:
+                            st.error("価格を正しく設定してください")
+                            results = None
+                    
+                    elif model_type == "Modified SBM":
+                        model = ModifiedSBMModel(st.session_state.inputs, st.session_state.outputs)
+                        results_list = []
+                        for i in range(len(st.session_state.inputs)):
+                            eff, lambdas, input_slacks, output_slacks = model.solve(i)
+                            results_list.append({
+                                'DMU': i+1,
+                                'Modified_SBM_Efficiency': eff,
+                                **{f'Lambda_{j+1}': lambdas[j] for j in range(len(lambdas))}
+                            })
+                        results = pd.DataFrame(results_list)
+                    
+                    elif model_type == "Series Network":
+                        model = SeriesNetworkModel(st.session_state.inputs, st.session_state.outputs)
+                        results_list = []
+                        for i in range(len(st.session_state.inputs)):
+                            eff, lambdas = model.solve(i, n_stages=network_stages)
+                            results_list.append({
+                                'DMU': i+1,
+                                'Network_Efficiency': eff,
+                                **{f'Lambda_{j+1}': lambdas[j] for j in range(len(lambdas))}
+                            })
+                        results = pd.DataFrame(results_list)
+                    
+                    elif model_type == "Malmquist":
+                        st.warning("Malmquistモデルには時系列データが必要です。現在の実装では基本的な分析のみサポートします。")
+                        model = MalmquistModel(st.session_state.inputs, st.session_state.outputs)
+                        results = model.evaluate_all()
+                    
+                    elif model_type == "Efficiency Ladder":
+                        model = EfficiencyLadderModel(st.session_state.inputs, st.session_state.outputs)
+                        results = model.evaluate_all()
+                    
+                    elif model_type == "Merger Analysis":
+                        st.info("マージ分析には複数のDMUグループが必要です。デフォルトでは全DMUを1グループとして分析します。")
+                        model = MergerAnalysisModel(st.session_state.inputs, st.session_state.outputs)
+                        # Simple analysis with all DMUs as one group
+                        groups = [[i for i in range(len(st.session_state.inputs))]]
+                        results = model.analyze_merger(groups)
+                    
+                    elif model_type == "Bootstrap DEA":
+                        n_bootstrap = st.number_input("ブートストラップ回数", min_value=100, max_value=10000, value=1000, step=100)
+                        model = BootstrapDEAModel(st.session_state.inputs, st.session_state.outputs)
+                        results = model.bootstrap(n_replications=n_bootstrap, rts=rts)
+                    
+                    elif model_type == "Add Min":
+                        model = AddMinModel(st.session_state.inputs, st.session_state.outputs)
+                        results_list = []
+                        for i in range(len(st.session_state.inputs)):
+                            eff, lambdas, input_slacks, output_slacks = model.solve(i, rts=rts)
+                            results_list.append({
+                                'DMU': i+1,
+                                'AddMin_Efficiency': eff,
+                                **{f'Lambda_{j+1}': lambdas[j] for j in range(len(lambdas))}
+                            })
+                        results = pd.DataFrame(results_list)
+                    
+                    elif model_type == "Add Super-Eff":
+                        model = AddSuperEffModel(st.session_state.inputs, st.session_state.outputs)
+                        results_list = []
+                        for i in range(len(st.session_state.inputs)):
+                            eff, lambdas, input_slacks, output_slacks = model.solve(i, rts=rts)
+                            results_list.append({
+                                'DMU': i+1,
+                                'AddSuperEff_Efficiency': eff,
+                                **{f'Lambda_{j+1}': lambdas[j] for j in range(len(lambdas))}
+                            })
+                        results = pd.DataFrame(results_list)
+                    
+                    elif model_type == "DEA-PS":
+                        model = DEAPSModel(st.session_state.inputs, st.session_state.outputs)
+                        results_list = []
+                        for i in range(len(st.session_state.inputs)):
+                            eff, lambdas, input_slacks, output_slacks, u, v = model.solve(
+                                i, orientation='io' if orientation == "入力指向" else 'oo', rts=rts
+                            )
+                            results_list.append({
+                                'DMU': i+1,
+                                'DEAPS_Efficiency': eff,
+                                **{f'Lambda_{j+1}': lambdas[j] for j in range(len(lambdas))}
+                            })
+                        results = pd.DataFrame(results_list)
+                    
+                    elif model_type == "StoNED":
+                        st.info("StoNEDモデルは単一出力のみをサポートします。")
+                        if st.session_state.outputs.shape[1] == 1:
+                            model = StoNEDModel(st.session_state.inputs, st.session_state.outputs.flatten())
+                            stoned_results = model.solve(rts=rts, method='MM')
+                            results = pd.DataFrame({
+                                'DMU': range(1, len(st.session_state.inputs) + 1),
+                                'Efficiency': stoned_results.get('efficiency', np.ones(len(st.session_state.inputs))),
+                                'Inefficiency': stoned_results.get('inefficiency', np.zeros(len(st.session_state.inputs)))
+                            })
+        else:
+                            st.error("StoNEDモデルは単一出力のみをサポートします")
+                            results = None
+                    
+                    if results is not None:
+                        st.session_state.results = results
+                        st.success("分析が完了しました！")
+            
+            except Exception as e:
+                st.error(f"エラー: {str(e)}")
+                import traceback
+                st.code(traceback.format_exc())
+        
+        if st.session_state.results is not None:
+            st.subheader("結果")
+            st.dataframe(st.session_state.results, use_container_width=True)
+            
+            csv = st.session_state.results.to_csv(index=False)
+            st.download_button(
+                label="結果をCSVでダウンロード",
+                data=csv,
+                file_name=f"{model_type.replace(' ', '_')}_results.csv",
+                mime="text/csv"
+            )
+
 # Visualization Page
 elif page == "結果の可視化":
     st.header("📈 結果の可視化")
     
     if st.session_state.results is None:
         st.warning("⚠️ まず他のページで分析を実行してください")
-    else:
+else:
         results = st.session_state.results
         
         # Efficiency score visualization
-        if 'Efficiency' in results.columns or any('Efficiency' in col for col in results.columns):
-            eff_col = [col for col in results.columns if 'Efficiency' in col][0] if any('Efficiency' in col for col in results.columns) else 'Efficiency'
+        eff_cols = [col for col in results.columns if 'Efficiency' in col or 'efficiency' in col.lower()]
+        if eff_cols:
+            eff_col = eff_cols[0]
             
             st.subheader("効率スコアの分布")
             
@@ -568,17 +808,19 @@ elif page == "結果の可視化":
         if st.session_state.inputs is not None and st.session_state.outputs is not None:
             st.subheader("入力・出力の関係")
             
-            if st.session_state.inputs.shape[1] >= 2 and st.session_state.outputs.shape[1] >= 1:
+            if st.session_state.inputs.shape[1] >= 1 and st.session_state.outputs.shape[1] >= 1:
                 # Create a combined dataframe
                 plot_df = pd.DataFrame({
                     'Input1': st.session_state.inputs[:, 0],
-                    'Input2': st.session_state.inputs[:, 1] if st.session_state.inputs.shape[1] > 1 else st.session_state.inputs[:, 0],
                     'Output1': st.session_state.outputs[:, 0],
                     'DMU': range(1, len(st.session_state.inputs) + 1)
                 })
                 
-                if st.session_state.results is not None and 'Efficiency' in st.session_state.results.columns:
-                    plot_df['Efficiency'] = st.session_state.results['Efficiency'].values
+                if st.session_state.inputs.shape[1] > 1:
+                    plot_df['Input2'] = st.session_state.inputs[:, 1]
+                
+                if eff_cols and eff_col in results.columns:
+                    plot_df['Efficiency'] = results[eff_col].values
                 
                 # Scatter plot
                 if 'Efficiency' in plot_df.columns:
@@ -611,6 +853,7 @@ st.sidebar.info("""
 
 **対応モデル:**
 - 基本モデル: CCR, BCC, Additive, Two-Phase
-- 高度なモデル: AP, MAJ, SBM, Cost/Revenue Efficiency
-- 追加モデル: DRS, IRS, FDH, MEA, Cross Efficiency
+- 高度なモデル: AP, MAJ, SBM, Cost/Revenue Efficiency, Norm L1, Congestion, Common Weights
+- 追加モデル: DRS, IRS, FDH, FDH+, MEA, Cross Efficiency, Non-Radial, LGO, RDM
+- 特殊モデル: Profit Efficiency, Modified SBM, Series Network, Malmquist, Efficiency Ladder, Merger Analysis, Bootstrap DEA, Add Min, Add Super-Eff, DEA-PS, StoNED
 """)
