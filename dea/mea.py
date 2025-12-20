@@ -63,17 +63,24 @@ class MEAModel:
                 n_constraints = self.n_inputs + self.n_outputs
                 A = np.zeros((n_constraints, n_vars))
                 
-                # Input constraints
+                # Input constraints: sum(lambda_j * x_ij) <= beta * x_ih for i=h, <= x_ip for i!=h
                 for i in range(self.n_inputs):
                     if i == h:
-                        A[i, 0] = -x_p[i]  # -beta * x_ph
-                    A[i, 1:] = self.inputs[:, i]
+                        A[i, 0] = x_p[i]  # beta * x_ph
+                        A[i, 1:] = -self.inputs[:, i]  # -sum(lambda_j * x_ij)
+                    else:
+                        A[i, 0] = 0.0
+                        A[i, 1:] = self.inputs[:, i]  # sum(lambda_j * x_ij)
                 
-                # Output constraints
+                # Output constraints: sum(lambda_j * y_rj) >= y_rp
                 for r in range(self.n_outputs):
+                    A[self.n_inputs + r, 0] = 0.0
                     A[self.n_inputs + r, 1:] = -self.outputs[:, r]
                 
                 b = np.zeros(n_constraints)
+                for i in range(self.n_inputs):
+                    if i != h:
+                        b[i] = x_p[i]
                 for r in range(self.n_outputs):
                     b[self.n_inputs + r] = -y_p[r]
                 
@@ -82,11 +89,16 @@ class MEAModel:
                     n_constraints += 1
                     A_new = np.zeros((n_constraints, n_vars))
                     A_new[:self.n_inputs + self.n_outputs, :] = A
-                    A_new[self.n_inputs + self.n_outputs, 1:] = 1.0
+                    A_new[self.n_inputs + self.n_outputs, 1:] = -1.0  # -sum(lambda) <= -1
                     A = A_new
-                    b = np.append(b, 1.0)
+                    b = np.append(b, -1.0)
                 
                 bounds = [(0, None)] * n_vars
+                
+                # Check for invalid values
+                if np.any(np.isnan(A)) or np.any(np.isinf(A)) or np.any(np.isnan(b)) or np.any(np.isinf(b)):
+                    directions[h] = 0.0
+                    continue
                 
                 result = linprog(c, A_ub=A, b_ub=b, bounds=bounds, method='highs')
                 
@@ -108,29 +120,41 @@ class MEAModel:
                 n_constraints = self.n_inputs + self.n_outputs
                 A = np.zeros((n_constraints, n_vars))
                 
-                # Input constraints
+                # Input constraints: sum(lambda_j * x_ij) <= x_ip
                 for i in range(self.n_inputs):
+                    A[i, 0] = 0.0
                     A[i, 1:] = self.inputs[:, i]
                 
-                # Output constraints
+                # Output constraints: sum(lambda_j * y_rj) >= beta * y_rh for r=h, >= y_rp for r!=h
                 for r in range(self.n_outputs):
                     if r == h:
-                        A[self.n_inputs + r, 0] = -y_p[r]  # -beta * y_ph
-                    A[self.n_inputs + r, 1:] = -self.outputs[:, r]
+                        A[self.n_inputs + r, 0] = y_p[r]  # beta * y_ph
+                        A[self.n_inputs + r, 1:] = -self.outputs[:, r]  # -sum(lambda_j * y_rj)
+                    else:
+                        A[self.n_inputs + r, 0] = 0.0
+                        A[self.n_inputs + r, 1:] = -self.outputs[:, r]
                 
                 b = np.zeros(n_constraints)
                 for i in range(self.n_inputs):
                     b[i] = x_p[i]
+                for r in range(self.n_outputs):
+                    if r != h:
+                        b[self.n_inputs + r] = -y_p[r]
                 
                 if self.rts == 'vrs':
                     n_constraints += 1
                     A_new = np.zeros((n_constraints, n_vars))
                     A_new[:self.n_inputs + self.n_outputs, :] = A
-                    A_new[self.n_inputs + self.n_outputs, 1:] = 1.0
+                    A_new[self.n_inputs + self.n_outputs, 1:] = -1.0
                     A = A_new
-                    b = np.append(b, 1.0)
+                    b = np.append(b, -1.0)
                 
                 bounds = [(0, None)] * n_vars
+                
+                # Check for invalid values
+                if np.any(np.isnan(A)) or np.any(np.isinf(A)) or np.any(np.isnan(b)) or np.any(np.isinf(b)):
+                    directions[h] = 1.0
+                    continue
                 
                 result = linprog(c, A_ub=A, b_ub=b, bounds=bounds, method='highs')
                 
