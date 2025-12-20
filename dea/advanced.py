@@ -25,16 +25,94 @@ class NormL1Model:
         if self.inputs.shape[0] != self.outputs.shape[0]:
             raise ValueError("Number of DMUs must be the same for inputs and outputs")
     
-    def solve(self, dmu_index: int) -> Tuple[float, np.ndarray]:
+    def solve(self, dmu_index: int) -> Tuple[float, float]:
         """
-        Solve Norm L1 Super-Efficiency Model
+        Solve Norm L1 Super-Efficiency Model (4.4)
         
-        Uses L1 norm to measure distance from efficient frontier
+        min w+ - w-
+        s.t. sum(lambda_j * x_ij) - x_i + w+ - w- = 0, i=1,...,m, j!=p
+             sum(lambda_j * y_rj) - y_r >= 0, r=1,...,s, j!=p
+             x_i <= x_ip, y_r >= y_rp
+             lambda_j >= 0, w+ >= 0, w- >= 0
+        
+        Returns:
+        --------
+        w_star : float
+            Optimal value of w+ - w-
+        super_efficiency : float
+            Super-efficiency score (1 + w*)
         """
-        # This is a simplified implementation
-        # The full model involves minimizing L1 norm distance
-        # For now, we'll use a basic approach
-        raise NotImplementedError("Norm L1 model implementation in progress")
+        # Variables: [lambda_1, ..., lambda_{p-1}, lambda_{p+1}, ..., lambda_n, x_1, ..., x_m, y_1, ..., y_s, w+, w-]
+        n_lambdas = self.n_dmus - 1
+        n_vars = n_lambdas + self.n_inputs + self.n_outputs + 2
+        
+        # Objective: minimize w+ - w-
+        c = np.zeros(n_vars)
+        c[n_lambdas + self.n_inputs + self.n_outputs] = 1.0  # w+
+        c[n_lambdas + self.n_inputs + self.n_outputs + 1] = -1.0  # -w-
+        
+        # Constraints
+        dmu_indices = [j for j in range(self.n_dmus) if j != dmu_index]
+        n_constraints = self.n_inputs + self.n_outputs + self.n_inputs + self.n_outputs
+        A = np.zeros((n_constraints, n_vars))
+        
+        # Input constraints: sum(lambda_j * x_ij) - x_i + w+ - w- = 0
+        for i in range(self.n_inputs):
+            for idx, j in enumerate(dmu_indices):
+                A[i, idx] = self.inputs[j, i]
+            A[i, n_lambdas + i] = -1.0  # -x_i
+            A[i, n_lambdas + self.n_inputs + self.n_outputs] = 1.0  # w+
+            A[i, n_lambdas + self.n_inputs + self.n_outputs + 1] = -1.0  # -w-
+        
+        # Output constraints: sum(lambda_j * y_rj) - y_r >= 0
+        for r in range(self.n_outputs):
+            for idx, j in enumerate(dmu_indices):
+                A[self.n_inputs + r, idx] = self.outputs[j, r]
+            A[self.n_inputs + r, n_lambdas + self.n_inputs + r] = -1.0  # -y_r
+        
+        # Bounds: x_i <= x_ip, y_r >= y_rp
+        for i in range(self.n_inputs):
+            A[self.n_inputs + self.n_outputs + i, n_lambdas + i] = 1.0
+        for r in range(self.n_outputs):
+            A[self.n_inputs + self.n_outputs + self.n_inputs + r, n_lambdas + self.n_inputs + r] = -1.0
+        
+        # Right-hand side
+        b = np.zeros(n_constraints)
+        for i in range(self.n_inputs):
+            b[self.n_inputs + self.n_outputs + i] = self.inputs[dmu_index, i]
+        for r in range(self.n_outputs):
+            b[self.n_inputs + self.n_outputs + self.n_inputs + r] = -self.outputs[dmu_index, r]
+        
+        # Constraint types: first set are equality, second set are inequality
+        A_eq = A[:self.n_inputs + self.n_outputs, :]
+        b_eq = b[:self.n_inputs + self.n_outputs]
+        A_ub = A[self.n_inputs + self.n_outputs:, :]
+        b_ub = b[self.n_inputs + self.n_outputs:]
+        
+        # Bounds
+        bounds = [(0, None)] * n_vars
+        
+        result = linprog(c, A_eq=A_eq, b_eq=b_eq, A_ub=A_ub, b_ub=b_ub,
+                         bounds=bounds, method='highs')
+        
+        if not result.success:
+            raise RuntimeError(f"Optimization failed for DMU {dmu_index}: {result.message}")
+        
+        w_star = result.fun
+        super_efficiency = 1.0 + w_star
+        
+        return w_star, super_efficiency
+    
+    def evaluate_all(self) -> pd.DataFrame:
+        results = []
+        for j in range(self.n_dmus):
+            w_star, super_eff = self.solve(j)
+            results.append({
+                'DMU': j + 1,
+                'W*': w_star,
+                'Super_Efficiency_NL1': super_eff
+            })
+        return pd.DataFrame(results)
 
 
 class CongestionModel:

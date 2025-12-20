@@ -11,12 +11,24 @@ from .ap import APModel
 from .maj import MAJModel
 from .additive import AdditiveModel
 from .twophase import TwoPhaseModel
-from .advanced import CongestionModel, CommonWeightsModel, DirectionalEfficiencyModel
+from .advanced import (
+    NormL1Model, CongestionModel, CommonWeightsModel, DirectionalEfficiencyModel
+)
+from .returns_to_scale import ReturnsToScaleModel
+from .cost_revenue import CostEfficiencyModel, RevenueEfficiencyModel
+from .malmquist import MalmquistModel
+from .sbm import SBMModel
+from .profit_network import ProfitEfficiencyModel, ModifiedSBMModel
 
 __version__ = "1.0.0"
 __all__ = [
     "CCRModel", "BCCModel", "APModel", "MAJModel",
     "AdditiveModel", "TwoPhaseModel",
-    "CongestionModel", "CommonWeightsModel", "DirectionalEfficiencyModel"
+    "NormL1Model", "CongestionModel", "CommonWeightsModel", "DirectionalEfficiencyModel",
+    "ReturnsToScaleModel",
+    "CostEfficiencyModel", "RevenueEfficiencyModel",
+    "MalmquistModel",
+    "SBMModel",
+    "ProfitEfficiencyModel", "ModifiedSBMModel"
 ]
 

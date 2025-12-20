@@ -40,10 +40,34 @@ Data Envelopment Analysis (DEA) implementation in Python based on Hosseinzadeh L
 #### MAJ Super-Efficiency Model
 - **MAJ Super-Efficiency Model** (4.3)
 
+#### Norm L1 Super-Efficiency Model
+- **Norm L1 Super-Efficiency Model** (4.4)
+
+#### Returns to Scale Models
+- **Returns to Scale - CCR Envelopment Model** (4.5.1)
+- **Returns to Scale - DEA Multiplier Model** (4.5.2)
+
+#### Cost and Revenue Efficiency Models
+- **Cost Efficiency Model** (4.6)
+- **Revenue Efficiency Model** (4.7)
+
+#### Malmquist Productivity Index
+- **Malmquist Productivity Index - CCR Multiplier Model** (4.8.1)
+- **Malmquist Productivity Index - CCR Envelopment Model** (4.8.2)
+
+#### SBM (Slacks-Based Measure) Models
+- **First Model of SBM** (4.9.1)
+- **Second Model of SBM** (4.9.2)
+
+#### Modified SBM Models
+- **Input-Oriented Modified SBM Model** (4.12.1)
+- **Output-Oriented Modified SBM Model** (4.12.2)
+
 #### Other Advanced Models
 - **Congestion DEA Model** (4.13)
 - **Common Set of Weights DEA Model** (4.14)
 - **Directional Efficiency DEA Model** (4.15)
+- **Profit Efficiency Model** (4.11)
 
 ## インストール
 
@@ -60,6 +84,10 @@ import numpy as np
 from dea import (
     CCRModel, BCCModel, APModel, MAJModel,
     AdditiveModel, TwoPhaseModel,
+    NormL1Model, ReturnsToScaleModel,
+    CostEfficiencyModel, RevenueEfficiencyModel,
+    MalmquistModel, SBMModel,
+    ProfitEfficiencyModel, ModifiedSBMModel,
     CongestionModel, CommonWeightsModel, DirectionalEfficiencyModel
 )
 
