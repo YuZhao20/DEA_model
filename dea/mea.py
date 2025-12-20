@@ -167,19 +167,35 @@ class MEAModel:
         
         return directions
     
-    def solve(self, dmu_index: int, orientation: str = 'in') -> Tuple[float, np.ndarray, np.ndarray]:
+    def solve(self, dmu_index: int, orientation: str = 'in', rts: str = None) -> Tuple[float, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """
         Solve MEA for a DMU
+        
+        Parameters:
+        -----------
+        dmu_index : int
+            Index of DMU under evaluation
+        orientation : str
+            'in' for input-oriented, 'out' for output-oriented
+        rts : str, optional
+            Returns to scale (overrides instance rts if provided)
         
         Returns:
         --------
         efficiency : float
             Overall efficiency score
-        directions : np.ndarray
-            Direction vector (potential improvements)
         lambdas : np.ndarray
             Optimal intensity variables
+        input_slacks : np.ndarray
+            Input slacks
+        output_slacks : np.ndarray
+            Output slacks
+        directions : np.ndarray
+            Direction vector (potential improvements)
         """
+        if rts is not None:
+            self.rts = rts.lower()
+        
         directions = self._min_direction(dmu_index, orientation)
         
         # Use directional efficiency with calculated directions
@@ -193,9 +209,9 @@ class MEAModel:
             gy = directions
         
         dea_model = DirectionalEfficiencyModel(self.inputs, self.outputs)
-        eff, lambdas = dea_model.solve(dmu_index, gx=gx, gy=gy)
+        eff, lambdas, input_slacks, output_slacks = dea_model.solve(dmu_index, gx=gx, gy=gy, rts=self.rts)
         
-        return eff, directions, lambdas
+        return eff, lambdas, input_slacks, output_slacks, directions
     
     def evaluate_all(self, orientation: str = 'in') -> pd.DataFrame:
         results = []

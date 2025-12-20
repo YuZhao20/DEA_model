@@ -24,41 +24,72 @@ class SBMModel:
         if self.inputs.shape[0] != self.outputs.shape[0]:
             raise ValueError("Number of DMUs must be the same for inputs and outputs")
     
-    def solve_model1(self, dmu_index: int) -> Tuple[float, np.ndarray, np.ndarray, np.ndarray]:
+    def solve_model1(self, dmu_index: int, rts: str = 'vrs') -> Tuple[float, np.ndarray, np.ndarray, np.ndarray]:
         """
         Solve First Model of SBM (4.9.1)
         
         Linearized SBM model where numerator is minimized
+        
+        Parameters:
+        -----------
+        dmu_index : int
+            Index of DMU under evaluation (0-based)
+        rts : str
+            Returns to scale: 'crs', 'vrs', 'drs', 'irs' (default: 'vrs')
         """
         # Variables: [t, lambda_1, ..., lambda_n, s_1^-, ..., s_m^-, s_1^+, ..., s_s^+]
         n_vars = 1 + self.n_dmus + self.n_inputs + self.n_outputs
         c = np.zeros(n_vars)
         c[0] = 1.0  # minimize t
         
-        # Constraints
-        n_constraints = 1 + self.n_inputs + self.n_outputs + self.n_inputs + self.n_outputs
-        A_eq = np.zeros((1 + self.n_inputs + self.n_outputs, n_vars))
+        # Constraints: 1 (normalization) + m (inputs) + s (outputs) + 1 (RTS if VRS)
+        n_eq_constraints = 1 + self.n_inputs + self.n_outputs
+        if rts == 'vrs':
+            n_eq_constraints += 1  # Add convexity constraint
+        
+        A_eq = np.zeros((n_eq_constraints, n_vars))
         A_ub = np.zeros((self.n_inputs + self.n_outputs, n_vars))
         
+        row = 0
         # Constraint: t - (1/m) * sum(s_i^- / x_ip) = 1
-        A_eq[0, 0] = 1.0
+        A_eq[row, 0] = 1.0
         for i in range(self.n_inputs):
-            A_eq[0, 1 + self.n_dmus + i] = -1.0 / (self.n_inputs * self.inputs[dmu_index, i])
+            A_eq[row, 1 + self.n_dmus + i] = -1.0 / (self.n_inputs * self.inputs[dmu_index, i])
+        row += 1
         
         # Input constraints: sum(lambda_j * x_ij) + s_i^- = t * x_ip
         for i in range(self.n_inputs):
-            A_eq[1 + i, 0] = -self.inputs[dmu_index, i]
-            A_eq[1 + i, 1:1 + self.n_dmus] = self.inputs[:, i]
-            A_eq[1 + i, 1 + self.n_dmus + i] = 1.0
+            A_eq[row, 0] = -self.inputs[dmu_index, i]
+            A_eq[row, 1:1 + self.n_dmus] = self.inputs[:, i]
+            A_eq[row, 1 + self.n_dmus + i] = 1.0
+            row += 1
         
         # Output constraints: sum(lambda_j * y_rj) - s_r^+ = t * y_rp
         for r in range(self.n_outputs):
-            A_eq[1 + self.n_inputs + r, 1:1 + self.n_dmus] = self.outputs[:, r]
-            A_eq[1 + self.n_inputs + r, 1 + self.n_dmus + self.n_inputs + r] = -1.0
-            A_eq[1 + self.n_inputs + r, 0] = -self.outputs[dmu_index, r]
+            A_eq[row, 1:1 + self.n_dmus] = self.outputs[:, r]
+            A_eq[row, 1 + self.n_dmus + self.n_inputs + r] = -1.0
+            A_eq[row, 0] = -self.outputs[dmu_index, r]
+            row += 1
         
-        b_eq = np.zeros(1 + self.n_inputs + self.n_outputs)
+        # RTS constraint
+        if rts == 'vrs':
+            # sum(lambda_j) = 1
+            A_eq[row, 1:1 + self.n_dmus] = 1.0
+            row += 1
+        elif rts == 'drs':
+            # sum(lambda_j) <= 1
+            A_ub = np.vstack([A_ub, np.zeros((1, n_vars))])
+            A_ub[-1, 1:1 + self.n_dmus] = 1.0
+        elif rts == 'irs':
+            # sum(lambda_j) >= 1
+            A_ub = np.vstack([A_ub, np.zeros((1, n_vars))])
+            A_ub[-1, 1:1 + self.n_dmus] = -1.0
+        # crs: no constraint on sum of lambdas
+        
+        b_eq = np.zeros(n_eq_constraints)
         b_eq[0] = 1.0
+        if rts == 'vrs':
+            b_eq[-1] = 1.0
         
         # Non-negativity constraints
         for i in range(self.n_inputs):
@@ -66,7 +97,7 @@ class SBMModel:
         for r in range(self.n_outputs):
             A_ub[self.n_inputs + r, 1 + self.n_dmus + self.n_inputs + r] = -1.0
         
-        b_ub = np.zeros(self.n_inputs + self.n_outputs)
+        b_ub = np.zeros(A_ub.shape[0])
         
         bounds = [(0, None)] * n_vars
         
@@ -81,47 +112,77 @@ class SBMModel:
         input_slacks = result.x[1 + self.n_dmus:1 + self.n_dmus + self.n_inputs]
         output_slacks = result.x[1 + self.n_dmus + self.n_inputs:]
         
-        # SBM efficiency
+        # SBM efficiency = t
         sbm_eff = t
         
         return sbm_eff, lambdas, input_slacks, output_slacks
     
-    def solve_model2(self, dmu_index: int) -> Tuple[float, np.ndarray, np.ndarray, np.ndarray]:
+    def solve_model2(self, dmu_index: int, rts: str = 'vrs') -> Tuple[float, np.ndarray, np.ndarray, np.ndarray]:
         """
         Solve Second Model of SBM (4.9.2)
         
         Linearized SBM model where denominator is maximized
+        
+        Parameters:
+        -----------
+        dmu_index : int
+            Index of DMU under evaluation (0-based)
+        rts : str
+            Returns to scale: 'crs', 'vrs', 'drs', 'irs' (default: 'vrs')
         """
-        # Similar structure but with different objective
         # Variables: [t, lambda_1, ..., lambda_n, s_1^-, ..., s_m^-, s_1^+, ..., s_s^+]
         n_vars = 1 + self.n_dmus + self.n_inputs + self.n_outputs
         c = np.zeros(n_vars)
         c[0] = -1.0  # maximize t (minimize -t)
         
-        # Constraints similar to model 1
-        n_constraints = 1 + self.n_inputs + self.n_outputs + self.n_inputs + self.n_outputs
-        A_eq = np.zeros((1 + self.n_inputs + self.n_outputs, n_vars))
+        # Constraints: 1 (normalization) + m (inputs) + s (outputs) + 1 (RTS if VRS)
+        n_eq_constraints = 1 + self.n_inputs + self.n_outputs
+        if rts == 'vrs':
+            n_eq_constraints += 1  # Add convexity constraint
+        
+        A_eq = np.zeros((n_eq_constraints, n_vars))
         A_ub = np.zeros((self.n_inputs + self.n_outputs, n_vars))
         
+        row = 0
         # Constraint: t + (1/s) * sum(s_r^+ / y_rp) = 1
-        A_eq[0, 0] = 1.0
+        A_eq[row, 0] = 1.0
         for r in range(self.n_outputs):
-            A_eq[0, 1 + self.n_dmus + self.n_inputs + r] = 1.0 / (self.n_outputs * self.outputs[dmu_index, r])
+            A_eq[row, 1 + self.n_dmus + self.n_inputs + r] = 1.0 / (self.n_outputs * self.outputs[dmu_index, r])
+        row += 1
         
         # Input constraints: sum(lambda_j * x_ij) + s_i^- = t * x_ip
         for i in range(self.n_inputs):
-            A_eq[1 + i, 0] = -self.inputs[dmu_index, i]
-            A_eq[1 + i, 1:1 + self.n_dmus] = self.inputs[:, i]
-            A_eq[1 + i, 1 + self.n_dmus + i] = 1.0
+            A_eq[row, 0] = -self.inputs[dmu_index, i]
+            A_eq[row, 1:1 + self.n_dmus] = self.inputs[:, i]
+            A_eq[row, 1 + self.n_dmus + i] = 1.0
+            row += 1
         
         # Output constraints: sum(lambda_j * y_rj) - s_r^+ = t * y_rp
         for r in range(self.n_outputs):
-            A_eq[1 + self.n_inputs + r, 1:1 + self.n_dmus] = self.outputs[:, r]
-            A_eq[1 + self.n_inputs + r, 1 + self.n_dmus + self.n_inputs + r] = -1.0
-            A_eq[1 + self.n_inputs + r, 0] = -self.outputs[dmu_index, r]
+            A_eq[row, 1:1 + self.n_dmus] = self.outputs[:, r]
+            A_eq[row, 1 + self.n_dmus + self.n_inputs + r] = -1.0
+            A_eq[row, 0] = -self.outputs[dmu_index, r]
+            row += 1
         
-        b_eq = np.zeros(1 + self.n_inputs + self.n_outputs)
+        # RTS constraint
+        if rts == 'vrs':
+            # sum(lambda_j) = 1
+            A_eq[row, 1:1 + self.n_dmus] = 1.0
+            row += 1
+        elif rts == 'drs':
+            # sum(lambda_j) <= 1
+            A_ub = np.vstack([A_ub, np.zeros((1, n_vars))])
+            A_ub[-1, 1:1 + self.n_dmus] = 1.0
+        elif rts == 'irs':
+            # sum(lambda_j) >= 1
+            A_ub = np.vstack([A_ub, np.zeros((1, n_vars))])
+            A_ub[-1, 1:1 + self.n_dmus] = -1.0
+        # crs: no constraint on sum of lambdas
+        
+        b_eq = np.zeros(n_eq_constraints)
         b_eq[0] = 1.0
+        if rts == 'vrs':
+            b_eq[-1] = 1.0
         
         # Non-negativity
         for i in range(self.n_inputs):
@@ -129,7 +190,7 @@ class SBMModel:
         for r in range(self.n_outputs):
             A_ub[self.n_inputs + r, 1 + self.n_dmus + self.n_inputs + r] = -1.0
         
-        b_ub = np.zeros(self.n_inputs + self.n_outputs)
+        b_ub = np.zeros(A_ub.shape[0])
         
         bounds = [(0, None)] * n_vars
         
@@ -144,11 +205,12 @@ class SBMModel:
         input_slacks = result.x[1 + self.n_dmus:1 + self.n_dmus + self.n_inputs]
         output_slacks = result.x[1 + self.n_dmus + self.n_inputs:]
         
-        sbm_eff = -result.fun  # negate because we minimized negative
+        # SBM efficiency = t (since we minimized -t, t = -result.fun)
+        sbm_eff = t
         
         return sbm_eff, lambdas, input_slacks, output_slacks
     
-    def evaluate_all(self, model_type: int = 1) -> pd.DataFrame:
+    def evaluate_all(self, model_type: int = 1, rts: str = 'vrs') -> pd.DataFrame:
         """
         Evaluate all DMUs
         
@@ -156,13 +218,15 @@ class SBMModel:
         -----------
         model_type : int
             1 for first model, 2 for second model
+        rts : str
+            Returns to scale: 'crs', 'vrs', 'drs', 'irs' (default: 'vrs')
         """
         results = []
         for j in range(self.n_dmus):
             if model_type == 1:
-                eff, lambdas, input_slacks, output_slacks = self.solve_model1(j)
+                eff, lambdas, input_slacks, output_slacks = self.solve_model1(j, rts=rts)
             else:
-                eff, lambdas, input_slacks, output_slacks = self.solve_model2(j)
+                eff, lambdas, input_slacks, output_slacks = self.solve_model2(j, rts=rts)
             
             result_dict = {'DMU': j + 1, 'SBM_Efficiency': eff}
             for i, lam in enumerate(lambdas):

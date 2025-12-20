@@ -88,7 +88,7 @@ if page == "データアップロード":
     
     uploaded_file = st.file_uploader("CSVファイルをアップロード", type=['csv'])
 
-    if uploaded_file is not None:
+if uploaded_file is not None:
         try:
             df = pd.read_csv(uploaded_file)
             st.session_state.data = df
@@ -138,30 +138,30 @@ if page == "データアップロード":
         except Exception as e:
             st.error(f"エラー: {str(e)}")
 
-    # Sample data generator
-    st.subheader("サンプルデータの生成")
-    if st.button("サンプルデータを生成"):
-        np.random.seed(42)
-        n_dmus = 10
-        n_inputs = 2
-        n_outputs = 2
-        
-        sample_data = {
-            'DMU': [f'DMU_{i+1}' for i in range(n_dmus)],
-        }
-        for i in range(n_inputs):
-            sample_data[f'Input_{i+1}'] = np.random.uniform(1, 10, n_dmus)
-        for i in range(n_outputs):
-            sample_data[f'Output_{i+1}'] = np.random.uniform(1, 10, n_dmus)
-        
-        df_sample = pd.DataFrame(sample_data)
-        st.session_state.data = df_sample
-        st.session_state.inputs = df_sample[[f'Input_{i+1}' for i in range(n_inputs)]].values
-        st.session_state.outputs = df_sample[[f'Output_{i+1}' for i in range(n_outputs)]].values
-        st.session_state.dmu_names = df_sample['DMU'].values
-        
-        st.success("サンプルデータを生成しました")
-        st.dataframe(df_sample)
+        # Sample data generator
+        st.subheader("サンプルデータの生成")
+        if st.button("サンプルデータを生成"):
+            np.random.seed(42)
+            n_dmus = 10
+            n_inputs = 2
+            n_outputs = 2
+            
+            sample_data = {
+                'DMU': [f'DMU_{i+1}' for i in range(n_dmus)],
+            }
+            for i in range(n_inputs):
+                sample_data[f'Input_{i+1}'] = np.random.uniform(1, 10, n_dmus)
+            for i in range(n_outputs):
+                sample_data[f'Output_{i+1}'] = np.random.uniform(1, 10, n_dmus)
+            
+            df_sample = pd.DataFrame(sample_data)
+            st.session_state.data = df_sample
+            st.session_state.inputs = df_sample[[f'Input_{i+1}' for i in range(n_inputs)]].values
+            st.session_state.outputs = df_sample[[f'Output_{i+1}' for i in range(n_outputs)]].values
+            st.session_state.dmu_names = df_sample['DMU'].values
+            
+            st.success("サンプルデータを生成しました")
+            st.dataframe(df_sample)
 
 # Basic Models Page
 elif page == "基本モデル":
@@ -339,6 +339,81 @@ elif page == "高度なモデル":
         if model_type == "SBM":
             sbm_type = st.selectbox("SBMタイプ", ["Model 1", "Model 2"], index=0)
         
+        # モデル定式化の表示
+        st.subheader("📐 モデル定式化")
+        model_formulations = {
+            "AP (Super-Efficiency)": r"""
+**入力指向包絡モデル:**
+$$\min \theta$$
+$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} \leq \theta x_{ip}, \quad i=1,\ldots,m$$
+$$\sum_{j=1}^{n} \lambda_j y_{rj} \geq y_{rp}, \quad r=1,\ldots,s$$
+$$\lambda_j \geq 0, \quad j=1,\ldots,n, j \neq p$$
+""",
+            "SBM": r"""
+**Model 1 (入力指向):**
+$$\rho^* = \min \frac{1 - \frac{1}{m}\sum_{i=1}^{m} \frac{s_i^-}{x_{ip}}}{1 + \frac{1}{s}\sum_{r=1}^{s} \frac{s_r^+}{y_{rp}}}$$
+$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} + s_i^- = x_{ip}, \quad i=1,\ldots,m$$
+$$\sum_{j=1}^{n} \lambda_j y_{rj} - s_r^+ = y_{rp}, \quad r=1,\ldots,s$$
+$$\sum_{j=1}^{n} \lambda_j = 1 \text{ (VRS)}$$
+$$\lambda_j \geq 0, s_i^- \geq 0, s_r^+ \geq 0$$
+""",
+            "Directional Efficiency": r"""
+$$\max \beta$$
+$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} \leq x_{ip} - \beta g_{xi}, \quad i=1,\ldots,m$$
+$$\sum_{j=1}^{n} \lambda_j y_{rj} \geq y_{rp} + \beta g_{yr}, \quad r=1,\ldots,s$$
+$$\sum_{j=1}^{n} \lambda_j = 1 \text{ (VRS)}$$
+$$\lambda_j \geq 0, \beta \geq 0$$
+""",
+            "Norm L1": r"""
+$$\min w^+ - w^-$$
+$$\text{s.t. } \sum_{j \neq p} \lambda_j x_{ij} - x_i + w^+ - w^- = 0, \quad i=1,\ldots,m$$
+$$\sum_{j \neq p} \lambda_j y_{rj} - y_r \geq 0, \quad r=1,\ldots,s$$
+$$x_i \leq x_{ip}, \quad y_r \geq y_{rp}$$
+$$\sum_{j \neq p} \lambda_j = 1 \text{ (VRS)}$$
+$$\lambda_j \geq 0, w^+ \geq 0, w^- \geq 0$$
+""",
+            "Congestion": r"""
+**Phase 1: BCC効率性**
+$$\min \theta$$
+$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} \leq \theta x_{ip}, \quad i=1,\ldots,m$$
+$$\sum_{j=1}^{n} \lambda_j y_{rj} \geq y_{rp}, \quad r=1,\ldots,s$$
+$$\sum_{j=1}^{n} \lambda_j = 1$$
+$$\lambda_j \geq 0$$
+
+**Phase 2: 混雑スラック最大化**
+$$\max \sum_{i=1}^{m} s_i^-$$
+$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} + s_i^- = \theta^* x_{ip}, \quad i=1,\ldots,m$$
+$$\sum_{j=1}^{n} \lambda_j y_{rj} = y_{rp}, \quad r=1,\ldots,s$$
+$$\sum_{j=1}^{n} \lambda_j = 1$$
+$$\lambda_j \geq 0, s_i^- \geq 0$$
+""",
+            "Common Weights": r"""
+$$\min \sum_{j=1}^{n} d_j$$
+$$\text{s.t. } \sum_{r=1}^{s} u_r y_{rj} - \sum_{i=1}^{m} v_i x_{ij} + d_j = 0, \quad j=1,\ldots,n$$
+$$u_r \geq \epsilon, \quad v_i \geq \epsilon$$
+$$d_j \geq 0$$
+""",
+            "Cost Efficiency": r"""
+$$\min \sum_{i=1}^{m} c_i x_i^*$$
+$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} \leq x_i^*, \quad i=1,\ldots,m$$
+$$\sum_{j=1}^{n} \lambda_j y_{rj} \geq y_{rp}, \quad r=1,\ldots,s$$
+$$\sum_{j=1}^{n} \lambda_j = 1 \text{ (VRS)}$$
+$$\lambda_j \geq 0, x_i^* \geq 0$$
+""",
+            "Revenue Efficiency": r"""
+$$\max \sum_{r=1}^{s} p_r y_r^*$$
+$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} \leq x_{ip}, \quad i=1,\ldots,m$$
+$$\sum_{j=1}^{n} \lambda_j y_{rj} \geq y_r^*, \quad r=1,\ldots,s$$
+$$\sum_{j=1}^{n} \lambda_j = 1 \text{ (VRS)}$$
+$$\lambda_j \geq 0, y_r^* \geq 0$$
+"""
+        }
+        
+        if model_type in model_formulations:
+            st.latex(model_formulations[model_type])
+        else:
+            st.info(f"{model_type}モデルの定式化は準備中です。")
+        
         if st.button("分析を実行", type="primary"):
             try:
                 with st.spinner("計算中..."):
@@ -358,9 +433,9 @@ elif page == "高度なモデル":
                         results_list = []
                         for i in range(len(st.session_state.inputs)):
                             if sbm_type == "Model 1":
-                                eff, lambdas, input_slacks, output_slacks = model.solve_model1(i)
+                                eff, lambdas, input_slacks, output_slacks = model.solve_model1(i, rts=rts)
                             else:
-                                eff, lambdas, input_slacks, output_slacks = model.solve_model2(i)
+                                eff, lambdas, input_slacks, output_slacks = model.solve_model2(i, rts=rts)
                             results_list.append({
                                 'DMU': i+1,
                                 'SBM_Efficiency': eff,
@@ -389,7 +464,7 @@ elif page == "高度なモデル":
                             model = DirectionalEfficiencyModel(st.session_state.inputs, st.session_state.outputs)
                             results_list = []
                             for i in range(len(st.session_state.inputs)):
-                                eff, lambdas, input_slacks, output_slacks = model.solve(i, g_inputs, g_outputs)
+                                eff, lambdas, input_slacks, output_slacks = model.solve(i, g_inputs, g_outputs, rts=rts)
                                 results_list.append({
                                     'DMU': i+1,
                                     'Directional_Efficiency': eff,
@@ -402,7 +477,7 @@ elif page == "高度なモデル":
                     
                     elif model_type == "Norm L1":
                         model = NormL1Model(st.session_state.inputs, st.session_state.outputs)
-                        results = model.evaluate_all()
+                        results = model.evaluate_all(rts=rts)
                     
                     elif model_type == "Congestion":
                         model = CongestionModel(st.session_state.inputs, st.session_state.outputs)

@@ -25,7 +25,7 @@ class NormL1Model:
         if self.inputs.shape[0] != self.outputs.shape[0]:
             raise ValueError("Number of DMUs must be the same for inputs and outputs")
     
-    def solve(self, dmu_index: int) -> Tuple[float, float]:
+    def solve(self, dmu_index: int, rts: str = 'vrs') -> Tuple[float, float]:
         """
         Solve Norm L1 Super-Efficiency Model (4.4)
         
@@ -34,6 +34,14 @@ class NormL1Model:
              sum(lambda_j * y_rj) - y_r >= 0, r=1,...,s, j!=p
              x_i <= x_ip, y_r >= y_rp
              lambda_j >= 0, w+ >= 0, w- >= 0
+             sum(lambda_j) = 1 (if VRS)
+        
+        Parameters:
+        -----------
+        dmu_index : int
+            Index of DMU under evaluation
+        rts : str
+            Returns to scale: 'crs', 'vrs', 'drs', 'irs' (default: 'vrs')
         
         Returns:
         --------
@@ -43,7 +51,8 @@ class NormL1Model:
             Super-efficiency score (1 + w*)
         """
         # Variables: [lambda_1, ..., lambda_{p-1}, lambda_{p+1}, ..., lambda_n, x_1, ..., x_m, y_1, ..., y_s, w+, w-]
-        n_lambdas = self.n_dmus - 1
+        dmu_indices = [j for j in range(self.n_dmus) if j != dmu_index]
+        n_lambdas = len(dmu_indices)
         n_vars = n_lambdas + self.n_inputs + self.n_outputs + 2
         
         # Objective: minimize w+ - w-
@@ -51,9 +60,13 @@ class NormL1Model:
         c[n_lambdas + self.n_inputs + self.n_outputs] = 1.0  # w+
         c[n_lambdas + self.n_inputs + self.n_outputs + 1] = -1.0  # -w-
         
-        # Constraints
-        dmu_indices = [j for j in range(self.n_dmus) if j != dmu_index]
+        # Constraints: inputs + outputs + bounds + RTS
         n_constraints = self.n_inputs + self.n_outputs + self.n_inputs + self.n_outputs
+        if rts == 'vrs':
+            n_constraints += 1
+        elif rts in ['drs', 'irs']:
+            n_constraints += 1
+        
         A = np.zeros((n_constraints, n_vars))
         
         # Input constraints: sum(lambda_j * x_ij) - x_i + w+ - w- = 0
@@ -71,23 +84,45 @@ class NormL1Model:
             A[self.n_inputs + r, n_lambdas + self.n_inputs + r] = -1.0  # -y_r
         
         # Bounds: x_i <= x_ip, y_r >= y_rp
+        row = self.n_inputs + self.n_outputs
         for i in range(self.n_inputs):
-            A[self.n_inputs + self.n_outputs + i, n_lambdas + i] = 1.0
+            A[row + i, n_lambdas + i] = 1.0
         for r in range(self.n_outputs):
-            A[self.n_inputs + self.n_outputs + self.n_inputs + r, n_lambdas + self.n_inputs + r] = -1.0
+            A[row + self.n_inputs + r, n_lambdas + self.n_inputs + r] = -1.0
+        
+        # RTS constraint
+        row = self.n_inputs + self.n_outputs + self.n_inputs + self.n_outputs
+        if rts == 'vrs':
+            A[row, :n_lambdas] = 1.0  # sum(lambda_j) = 1
+        elif rts == 'drs':
+            A[row, :n_lambdas] = 1.0  # sum(lambda_j) <= 1
+        elif rts == 'irs':
+            A[row, :n_lambdas] = -1.0  # sum(lambda_j) >= 1
         
         # Right-hand side
         b = np.zeros(n_constraints)
+        row = self.n_inputs + self.n_outputs
         for i in range(self.n_inputs):
-            b[self.n_inputs + self.n_outputs + i] = self.inputs[dmu_index, i]
+            b[row + i] = self.inputs[dmu_index, i]
         for r in range(self.n_outputs):
-            b[self.n_inputs + self.n_outputs + self.n_inputs + r] = -self.outputs[dmu_index, r]
+            b[row + self.n_inputs + r] = -self.outputs[dmu_index, r]
         
-        # Constraint types: first set are equality, second set are inequality
-        A_eq = A[:self.n_inputs + self.n_outputs, :]
-        b_eq = b[:self.n_inputs + self.n_outputs]
-        A_ub = A[self.n_inputs + self.n_outputs:, :]
-        b_ub = b[self.n_inputs + self.n_outputs:]
+        if rts == 'vrs':
+            b[row + self.n_inputs + self.n_outputs] = 1.0
+        elif rts == 'drs':
+            b[row + self.n_inputs + self.n_outputs] = 1.0
+        elif rts == 'irs':
+            b[row + self.n_inputs + self.n_outputs] = -1.0
+        
+        # Constraint types
+        n_eq = self.n_inputs + self.n_outputs
+        if rts == 'vrs':
+            n_eq += 1
+        
+        A_eq = A[:n_eq, :] if n_eq > 0 else None
+        b_eq = b[:n_eq] if n_eq > 0 else None
+        A_ub = A[n_eq:, :] if n_eq < n_constraints else None
+        b_ub = b[n_eq:] if n_eq < n_constraints else None
         
         # Bounds
         bounds = [(0, None)] * n_vars
@@ -103,10 +138,10 @@ class NormL1Model:
         
         return w_star, super_efficiency
     
-    def evaluate_all(self) -> pd.DataFrame:
+    def evaluate_all(self, rts: str = 'vrs') -> pd.DataFrame:
         results = []
         for j in range(self.n_dmus):
-            w_star, super_eff = self.solve(j)
+            w_star, super_eff = self.solve(j, rts=rts)
             results.append({
                 'DMU': j + 1,
                 'W*': w_star,
@@ -130,13 +165,24 @@ class CongestionModel:
         if self.inputs.shape[0] != self.outputs.shape[0]:
             raise ValueError("Number of DMUs must be the same for inputs and outputs")
     
-    def solve(self, dmu_index: int) -> Tuple[float, np.ndarray, np.ndarray]:
+    def solve(self, dmu_index: int) -> Tuple[float, np.ndarray, np.ndarray, np.ndarray]:
         """
         Solve Congestion DEA Model (4.13)
         
         Two-phase model:
         Phase 1: Solve BCC model to get efficiency
         Phase 2: Find congestion slacks
+        
+        Returns:
+        --------
+        eff : float
+            Efficiency score from Phase 1
+        lambdas : np.ndarray
+            Optimal intensity variables
+        input_slacks : np.ndarray
+            Congestion input slacks
+        output_slacks : np.ndarray
+            Output slacks (usually zero for congestion)
         """
         # Phase 1: BCC model
         from .bcc import BCCModel
@@ -178,9 +224,9 @@ class CongestionModel:
             raise RuntimeError(f"Optimization failed for DMU {dmu_index}: {result.message}")
         
         congestion_slacks = result.x[self.n_dmus:]
-        congestion_sum = np.sum(congestion_slacks)
+        output_slacks = np.zeros(self.n_outputs)  # Congestion model doesn't have output slacks
         
-        return eff, congestion_slacks, congestion_sum
+        return eff, lambdas, congestion_slacks, output_slacks
     
     def evaluate_all(self) -> pd.DataFrame:
         results = []
@@ -262,6 +308,36 @@ class CommonWeightsModel:
         obj_value = result.fun
         
         return u_weights, v_weights, obj_value
+    
+    def evaluate_all(self) -> pd.DataFrame:
+        """
+        Evaluate all DMUs using common weights
+        
+        Returns:
+        --------
+        pd.DataFrame
+            DataFrame with efficiency scores for all DMUs
+        """
+        u_weights, v_weights, obj_value = self.solve()
+        
+        # Calculate efficiency for each DMU
+        results = []
+        for j in range(self.n_dmus):
+            numerator = np.sum(u_weights * self.outputs[j, :])
+            denominator = np.sum(v_weights * self.inputs[j, :])
+            efficiency = numerator / denominator if denominator > 0 else 0.0
+            
+            result_dict = {
+                'DMU': j + 1,
+                'Efficiency': efficiency
+            }
+            for r in range(self.n_outputs):
+                result_dict[f'Weight_Output_{r+1}'] = u_weights[r]
+            for i in range(self.n_inputs):
+                result_dict[f'Weight_Input_{i+1}'] = v_weights[i]
+            results.append(result_dict)
+        
+        return pd.DataFrame(results)
 
 
 class DirectionalEfficiencyModel:
@@ -279,40 +355,81 @@ class DirectionalEfficiencyModel:
         if self.inputs.shape[0] != self.outputs.shape[0]:
             raise ValueError("Number of DMUs must be the same for inputs and outputs")
     
-    def solve(self, dmu_index: int, gx: np.ndarray = None, gy: np.ndarray = None) -> Tuple[float, np.ndarray]:
+    def solve(self, dmu_index: int, gx: np.ndarray = None, gy: np.ndarray = None, rts: str = 'vrs') -> Tuple[float, np.ndarray, np.ndarray, np.ndarray]:
         """
         Solve Directional Efficiency Model (4.15)
         
         max beta
-        s.t. beta*x_ip + sum(lambda_j * x_ij) <= x_ip, i=1,...,m
-             -beta*y_rp + sum(lambda_j * y_rj) >= y_rp, r=1,...,s
+        s.t. beta*gx_i + sum(lambda_j * x_ij) <= x_ip, i=1,...,m
+             -beta*gy_r + sum(lambda_j * y_rj) >= y_rp, r=1,...,s
              lambda_j >= 0
+             sum(lambda_j) = 1 (if VRS)
         
         Default direction: gx = -x_p, gy = y_p
+        
+        Parameters:
+        -----------
+        dmu_index : int
+            Index of DMU under evaluation
+        gx : np.ndarray, optional
+            Input direction vector
+        gy : np.ndarray, optional
+            Output direction vector
+        rts : str
+            Returns to scale: 'crs', 'vrs', 'drs', 'irs' (default: 'vrs')
+        
+        Returns:
+        --------
+        efficiency : float
+            Directional efficiency score
+        lambdas : np.ndarray
+            Optimal intensity variables
+        input_slacks : np.ndarray
+            Input slacks
+        output_slacks : np.ndarray
+            Output slacks
         """
         if gx is None:
             gx = -self.inputs[dmu_index, :]
         if gy is None:
             gy = self.outputs[dmu_index, :]
         
-        # Objective: maximize beta
-        c = np.zeros(self.n_dmus + 1)
-        c[0] = -1.0  # negative because linprog minimizes
+        # Variables: [beta, lambda_1, ..., lambda_n, s_1^-, ..., s_m^-, s_1^+, ..., s_s^+]
+        n_vars = 1 + self.n_dmus + self.n_inputs + self.n_outputs
+        c = np.zeros(n_vars)
+        c[0] = -1.0  # maximize beta (minimize -beta)
         
-        # Constraints
+        # Constraints: inputs + outputs + RTS (if VRS)
         n_constraints = self.n_inputs + self.n_outputs
-        A = np.zeros((n_constraints, self.n_dmus + 1))
+        if rts == 'vrs':
+            n_constraints += 1
         
-        # Input constraints: beta*gx_i + sum(lambda_j * x_ij) <= x_ip
+        A = np.zeros((n_constraints, n_vars))
+        
+        # Input constraints: beta*gx_i + sum(lambda_j * x_ij) + s_i^- <= x_ip
         for i in range(self.n_inputs):
             A[i, 0] = gx[i]  # beta coefficient
-            A[i, 1:] = self.inputs[:, i]  # lambda coefficients
+            A[i, 1:1 + self.n_dmus] = self.inputs[:, i]  # lambda coefficients
+            A[i, 1 + self.n_dmus + i] = 1.0  # s_i^-
         
-        # Output constraints: -beta*gy_r + sum(lambda_j * y_rj) >= y_rp
-        # For linprog: beta*gy_r - sum(lambda_j * y_rj) <= -y_rp
+        # Output constraints: -beta*gy_r + sum(lambda_j * y_rj) - s_r^+ >= y_rp
+        # For linprog: beta*gy_r - sum(lambda_j * y_rj) + s_r^+ <= -y_rp
         for r in range(self.n_outputs):
             A[self.n_inputs + r, 0] = gy[r]  # beta coefficient
-            A[self.n_inputs + r, 1:] = -self.outputs[:, r]  # lambda coefficients
+            A[self.n_inputs + r, 1:1 + self.n_dmus] = -self.outputs[:, r]  # lambda coefficients
+            A[self.n_inputs + r, 1 + self.n_dmus + self.n_inputs + r] = 1.0  # s_r^+
+        
+        # RTS constraint
+        if rts == 'vrs':
+            A[self.n_inputs + self.n_outputs, 1:1 + self.n_dmus] = 1.0  # sum(lambda_j) = 1
+        elif rts == 'drs':
+            n_constraints += 1
+            A = np.vstack([A, np.zeros((1, n_vars))])
+            A[-1, 1:1 + self.n_dmus] = 1.0  # sum(lambda_j) <= 1
+        elif rts == 'irs':
+            n_constraints += 1
+            A = np.vstack([A, np.zeros((1, n_vars))])
+            A[-1, 1:1 + self.n_dmus] = -1.0  # sum(lambda_j) >= 1
         
         # Right-hand side
         b = np.zeros(n_constraints)
@@ -320,18 +437,38 @@ class DirectionalEfficiencyModel:
             b[i] = self.inputs[dmu_index, i]
         for r in range(self.n_outputs):
             b[self.n_inputs + r] = -self.outputs[dmu_index, r]
+        if rts == 'vrs':
+            b[self.n_inputs + self.n_outputs] = 1.0
+        elif rts == 'drs':
+            b[-1] = 1.0
+        elif rts == 'irs':
+            b[-1] = -1.0
         
-        bounds = [(0, None)] * (self.n_dmus + 1)
+        # Constraint types
+        if rts == 'vrs':
+            A_eq = A[self.n_inputs + self.n_outputs:self.n_inputs + self.n_outputs + 1, :]
+            b_eq = b[self.n_inputs + self.n_outputs:self.n_inputs + self.n_outputs + 1]
+            A_ub = A[:self.n_inputs + self.n_outputs, :]
+            b_ub = b[:self.n_inputs + self.n_outputs]
+        else:
+            A_eq = None
+            b_eq = None
+            A_ub = A
+            b_ub = b
         
-        result = linprog(c, A_ub=A, b_ub=b, bounds=bounds, method='highs')
+        bounds = [(0, None)] * n_vars
+        
+        result = linprog(c, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method='highs')
         
         if not result.success:
             raise RuntimeError(f"Optimization failed for DMU {dmu_index}: {result.message}")
         
         efficiency = -result.fun
-        lambdas = result.x[1:]
+        lambdas = result.x[1:1 + self.n_dmus]
+        input_slacks = result.x[1 + self.n_dmus:1 + self.n_dmus + self.n_inputs]
+        output_slacks = result.x[1 + self.n_dmus + self.n_inputs:]
         
-        return efficiency, lambdas
+        return efficiency, lambdas, input_slacks, output_slacks
     
     def evaluate_all(self, gx: np.ndarray = None, gy: np.ndarray = None) -> pd.DataFrame:
         results = []
