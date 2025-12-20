@@ -34,6 +34,7 @@ from .addsupereff import AddSuperEffModel
 from .deaps import DEAPSModel
 from .cross_efficiency import CrossEfficiencyModel
 from .undesirable import transform_undesirable
+from .stoned import StoNEDModel
 
 __version__ = "1.0.0"
 __all__ = [
@@ -59,6 +60,7 @@ __all__ = [
     "AddSuperEffModel",
     "DEAPSModel",
     "CrossEfficiencyModel",
-    "transform_undesirable"
+    "transform_undesirable",
+    "StoNEDModel"
 ]
 

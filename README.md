@@ -99,6 +99,13 @@ Data Envelopment Analysis (DEA) implementation in Python based on Hosseinzadeh L
 - **Cross-Efficiency Analysis** - Based on Doyle and Green (1994), deaR package (cross_efficiency)
 - **Undesirable Inputs/Outputs Handling** - Based on Seiford and Zhu (2002), deaR package (undesirable_basic)
 
+#### Additional Models from Benchmarking Package
+- **StoNED (Stochastic Non-smooth Envelopment of Data) Model** - Based on Kuosmanen and Kortelainen (2012), Benchmarking package (stoned)
+  - Combines DEA and SFA approaches
+  - Supports multiplicative and additive error terms
+  - Methods: MM (Method of Moments) and PSL (Pseudo Likelihood)
+  - Note: This is a complex model that may require numerical tuning for large datasets
+
 ## インストール
 
 ```bash
@@ -721,6 +728,15 @@ transformed_inputs, transformed_outputs, vtrans_i, vtrans_o = transform_undesira
 )
 print("Transformed inputs shape:", transformed_inputs.shape)
 print("Translation vectors:", vtrans_i, vtrans_o)
+
+# 26. StoNED (Stochastic Non-smooth Envelopment of Data) Model
+from dea import StoNEDModel
+# Note: StoNED requires single output
+output_single = outputs[:, 0]  # Use first output
+stoned = StoNEDModel(inputs, output_single)
+results = stoned.solve(rts='vrs', cost=False, mult=True, method='MM')
+print("StoNED Efficiency:", results['eff'])
+print("StoNED Sigma_u:", results['sigma_u'])
 ```
 
 ### テスト実行
