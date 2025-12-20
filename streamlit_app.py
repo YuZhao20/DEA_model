@@ -74,8 +74,8 @@ if page == "データアップロード":
     """)
     
     uploaded_file = st.file_uploader("CSVファイルをアップロード", type=['csv'])
-
-if uploaded_file is not None:
+    
+    if uploaded_file is not None:
         try:
             df = pd.read_csv(uploaded_file)
             st.session_state.data = df
@@ -374,9 +374,6 @@ elif page == "高度なモデル":
                     if results is not None:
                         st.session_state.results = results
                         st.success("分析が完了しました！")
-                    
-                    st.session_state.results = results
-                    st.success("分析が完了しました！")
             
             except Exception as e:
                 st.error(f"エラー: {str(e)}")
@@ -617,4 +614,3 @@ st.sidebar.info("""
 - 高度なモデル: AP, MAJ, SBM, Cost/Revenue Efficiency
 - 追加モデル: DRS, IRS, FDH, MEA, Cross Efficiency
 """)
-
