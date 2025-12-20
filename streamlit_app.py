@@ -88,7 +88,7 @@ if page == "データアップロード":
     
     uploaded_file = st.file_uploader("CSVファイルをアップロード", type=['csv'])
 
-    if uploaded_file is not None:
+if uploaded_file is not None:
         try:
             df = pd.read_csv(uploaded_file)
             st.session_state.data = df
@@ -235,6 +235,72 @@ elif page == "基本モデル":
         model_type_add = "CCR"
         if model_type == "Additive":
             model_type_add = st.selectbox("Additiveタイプ", ["CCR", "BCC"], index=0)
+        
+        # モデル定式化の表示
+        st.subheader("📐 モデル定式化")
+        model_formulations = {
+            "CCR": r"""
+**入力指向包絡モデル:**
+$$\min \theta$$
+$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} \leq \theta x_{ip}, \quad i=1,\ldots,m$$
+$$\sum_{j=1}^{n} \lambda_j y_{rj} \geq y_{rp}, \quad r=1,\ldots,s$$
+$$\lambda_j \geq 0, \quad j=1,\ldots,n$$
+
+**入力指向乗数モデル:**
+$$\max \sum_{r=1}^{s} u_r y_{rp}$$
+$$\text{s.t. } \sum_{r=1}^{s} u_r y_{rj} - \sum_{i=1}^{m} v_i x_{ij} \leq 0, \quad j=1,\ldots,n$$
+$$\sum_{i=1}^{m} v_i x_{ip} = 1$$
+$$u_r \geq \epsilon, \quad v_i \geq \epsilon$$
+""",
+            "BCC": r"""
+**入力指向包絡モデル:**
+$$\min \theta$$
+$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} \leq \theta x_{ip}, \quad i=1,\ldots,m$$
+$$\sum_{j=1}^{n} \lambda_j y_{rj} \geq y_{rp}, \quad r=1,\ldots,s$$
+$$\sum_{j=1}^{n} \lambda_j = 1$$
+$$\lambda_j \geq 0, \quad j=1,\ldots,n$$
+
+**入力指向乗数モデル:**
+$$\max \sum_{r=1}^{s} u_r y_{rp} + u_0$$
+$$\text{s.t. } \sum_{r=1}^{s} u_r y_{rj} - \sum_{i=1}^{m} v_i x_{ij} + u_0 \leq 0, \quad j=1,\ldots,n$$
+$$\sum_{i=1}^{m} v_i x_{ip} = 1$$
+$$u_r \geq \epsilon, \quad v_i \geq \epsilon$$
+""",
+            "Additive": r"""
+**Additive CCRモデル:**
+$$\max \sum_{i=1}^{m} s_i^- + \sum_{r=1}^{s} s_r^+$$
+$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} + s_i^- = x_{ip}, \quad i=1,\ldots,m$$
+$$\sum_{j=1}^{n} \lambda_j y_{rj} - s_r^+ = y_{rp}, \quad r=1,\ldots,s$$
+$$\lambda_j \geq 0, \quad s_i^- \geq 0, \quad s_r^+ \geq 0$$
+
+**Additive BCCモデル:**
+$$\max \sum_{i=1}^{m} s_i^- + \sum_{r=1}^{s} s_r^+$$
+$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} + s_i^- = x_{ip}, \quad i=1,\ldots,m$$
+$$\sum_{j=1}^{n} \lambda_j y_{rj} - s_r^+ = y_{rp}, \quad r=1,\ldots,s$$
+$$\sum_{j=1}^{n} \lambda_j = 1$$
+$$\lambda_j \geq 0, \quad s_i^- \geq 0, \quad s_r^+ \geq 0$$
+""",
+            "Two-Phase": r"""
+**Phase 1: 効率性の最大化**
+$$\min \theta$$
+$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} \leq \theta x_{ip}, \quad i=1,\ldots,m$$
+$$\sum_{j=1}^{n} \lambda_j y_{rj} \geq y_{rp}, \quad r=1,\ldots,s$$
+$$\sum_{j=1}^{n} \lambda_j = 1$$
+$$\lambda_j \geq 0$$
+
+**Phase 2: スラックの最大化**
+$$\max \sum_{i=1}^{m} s_i^- + \sum_{r=1}^{s} s_r^+$$
+$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} + s_i^- = \theta^* x_{ip}, \quad i=1,\ldots,m$$
+$$\sum_{j=1}^{n} \lambda_j y_{rj} - s_r^+ = y_{rp}, \quad r=1,\ldots,s$$
+$$\sum_{j=1}^{n} \lambda_j = 1$$
+$$\lambda_j \geq 0, \quad s_i^- \geq 0, \quad s_r^+ \geq 0$$
+"""
+        }
+        
+        if model_type in model_formulations:
+            st.latex(model_formulations[model_type])
+        else:
+            st.info(f"{model_type}モデルの定式化は準備中です。")
         
         if st.button("分析を実行", type="primary"):
             try:
@@ -588,6 +654,95 @@ elif page == "追加モデル":
         rts = st.selectbox("規模の収穫", ["vrs", "drs", "crs", "irs"], index=0)
         orientation = st.selectbox("方向", ["入力指向", "出力指向"], index=0)
         
+        # モデル定式化の表示
+        st.subheader("📐 モデル定式化")
+        model_formulations = {
+            "DRS": r"""
+**Decreasing Returns to Scale (DRS) モデル:**
+$$\min \theta$$
+$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} \leq \theta x_{ip}, \quad i=1,\ldots,m$$
+$$\sum_{j=1}^{n} \lambda_j y_{rj} \geq y_{rp}, \quad r=1,\ldots,s$$
+$$\sum_{j=1}^{n} \lambda_j \leq 1$$
+$$\lambda_j \geq 0$$
+""",
+            "IRS": r"""
+**Increasing Returns to Scale (IRS) モデル:**
+$$\min \theta$$
+$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} \leq \theta x_{ip}, \quad i=1,\ldots,m$$
+$$\sum_{j=1}^{n} \lambda_j y_{rj} \geq y_{rp}, \quad r=1,\ldots,s$$
+$$\sum_{j=1}^{n} \lambda_j \geq 1$$
+$$\lambda_j \geq 0$$
+""",
+            "FDH": r"""
+**Free Disposal Hull (FDH) モデル:**
+$$\min \theta$$
+$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} \leq \theta x_{ip}, \quad i=1,\ldots,m$$
+$$\sum_{j=1}^{n} \lambda_j y_{rj} \geq y_{rp}, \quad r=1,\ldots,s$$
+$$\sum_{j=1}^{n} \lambda_j = 1$$
+$$\lambda_j \in \{0, 1\}, \quad j=1,\ldots,n$$
+""",
+            "FDH+": r"""
+**FDH+ モデル:**
+$$\min \theta$$
+$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} \leq \theta x_{ip}, \quad i=1,\ldots,m$$
+$$\sum_{j=1}^{n} \lambda_j y_{rj} \geq y_{rp}, \quad r=1,\ldots,s$$
+$$\sum_{j=1}^{n} \lambda_j = 1$$
+$$\lambda_j \geq 0, \quad \lambda_j \leq 1, \quad j=1,\ldots,n$$
+""",
+            "MEA": r"""
+**Multi-directional Efficiency Analysis (MEA) モデル:**
+$$\max \beta$$
+$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} \leq x_{ip} - \beta g_{xi}, \quad i=1,\ldots,m$$
+$$\sum_{j=1}^{n} \lambda_j y_{rj} \geq y_{rp} + \beta g_{yr}, \quad r=1,\ldots,s$$
+$$\sum_{j=1}^{n} \lambda_j = 1 \text{ (VRS)}$$
+$$\lambda_j \geq 0, \quad \beta \geq 0$$
+
+ここで、$g_{xi}$ と $g_{yr}$ は各DMUの潜在的な改善方向
+""",
+            "Cross Efficiency": r"""
+**Cross-Efficiency モデル:**
+各DMU $d$ について、他のすべてのDMU $k$ の最適重み $(u_k^*, v_k^*)$ を使用:
+
+$$E_{dk} = \frac{\sum_{r=1}^{s} u_{rk}^* y_{rd}}{\sum_{i=1}^{m} v_{ik}^* x_{id}}$$
+
+平均Cross-Efficiency:
+$$\bar{E}_d = \frac{1}{n} \sum_{k=1}^{n} E_{dk}$$
+""",
+            "Non-Radial": r"""
+**Non-Radial DEA モデル:**
+$$\min \frac{1}{m} \sum_{i=1}^{m} \theta_i$$
+$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} \leq \theta_i x_{ip}, \quad i=1,\ldots,m$$
+$$\sum_{j=1}^{n} \lambda_j y_{rj} \geq y_{rp}, \quad r=1,\ldots,s$$
+$$\sum_{j=1}^{n} \lambda_j = 1 \text{ (VRS)}$$
+$$\lambda_j \geq 0, \quad 0 \leq \theta_i \leq 1$$
+""",
+            "LGO": r"""
+**Linear Goal-Oriented (LGO) モデル:**
+$$\min \sum_{i=1}^{m} w_i s_i^- + \sum_{r=1}^{s} w_r s_r^+$$
+$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} + s_i^- = x_{ip}, \quad i=1,\ldots,m$$
+$$\sum_{j=1}^{n} \lambda_j y_{rj} - s_r^+ = y_{rp}, \quad r=1,\ldots,s$$
+$$\sum_{j=1}^{n} \lambda_j = 1 \text{ (VRS)}$$
+$$\lambda_j \geq 0, \quad s_i^- \geq 0, \quad s_r^+ \geq 0$$
+
+ここで、$w_i$ と $w_r$ は入力・出力の重み
+""",
+            "RDM": r"""
+**Range Directional Model (RDM) モデル:**
+$$\max \beta$$
+$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} \leq x_{ip} - \beta R_i^x, \quad i=1,\ldots,m$$
+$$\sum_{j=1}^{n} \lambda_j y_{rj} \geq y_{rp} + \beta R_r^y, \quad r=1,\ldots,s$$
+$$\sum_{j=1}^{n} \lambda_j = 1 \text{ (VRS)}$$
+$$\lambda_j \geq 0, \quad \beta \geq 0$$
+
+ここで、$R_i^x = \max_j x_{ij} - \min_j x_{ij}$、$R_r^y = \max_j y_{rj} - \min_j y_{rj}$
+"""
+        }
+        
+        if model_type in model_formulations:
+            st.latex(model_formulations[model_type])
+        else:
+            st.info(f"{model_type}モデルの定式化は準備中です。")
+        
         if st.button("分析を実行", type="primary"):
             try:
                 with st.spinner("計算中..."):
@@ -752,6 +907,143 @@ elif page == "特殊モデル":
         
         if model_type == "Series Network":
             network_stages = st.number_input("ネットワーク段階数", min_value=2, max_value=10, value=2, step=1)
+        
+        # モデル定式化の表示
+        st.subheader("📐 モデル定式化")
+        model_formulations = {
+            "Profit Efficiency": r"""
+**Profit Efficiency モデル:**
+$$\max \sum_{r=1}^{s} p_r y_r^* - \sum_{i=1}^{m} w_i x_i^*$$
+$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} \leq x_i^*, \quad i=1,\ldots,m$$
+$$\sum_{j=1}^{n} \lambda_j y_{rj} \geq y_r^*, \quad r=1,\ldots,s$$
+$$\sum_{j=1}^{n} \lambda_j = 1 \text{ (VRS)}$$
+$$\lambda_j \geq 0, \quad x_i^* \geq 0, \quad y_r^* \geq 0$$
+
+ここで、$p_r$ は出力価格、$w_i$ は入力価格
+""",
+            "Modified SBM": r"""
+**Modified SBM モデル:**
+$$\rho^* = \min \frac{1 - \frac{1}{m}\sum_{i=1}^{m} \frac{s_i^-}{x_{ip}}}{1 + \frac{1}{s}\sum_{r=1}^{s} \frac{s_r^+}{y_{rp}}}$$
+$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} + s_i^- = x_{ip}, \quad i=1,\ldots,m$$
+$$\sum_{j=1}^{n} \lambda_j y_{rj} - s_r^+ = y_{rp}, \quad r=1,\ldots,s$$
+$$\sum_{j=1}^{n} \lambda_j = 1$$
+$$\lambda_j \geq 0, \quad s_i^- \geq 0, \quad s_r^+ \geq 0$$
+
+修正: 非効率DMUのスラックを考慮した効率性測定
+""",
+            "Series Network": r"""
+**Series Network DEA モデル:**
+各段階 $k$ について:
+
+$$\min \theta_k$$
+$$\text{s.t. } \sum_{j=1}^{n} \lambda_j^k x_{ij}^k \leq \theta_k x_{ip}^k, \quad i=1,\ldots,m_k$$
+$$\sum_{j=1}^{n} \lambda_j^k z_{hj}^k \geq z_{hp}^k, \quad h=1,\ldots,H_k$$
+$$\sum_{j=1}^{n} \lambda_j^k = 1$$
+$$\lambda_j^k \geq 0$$
+
+全体効率: $\theta^* = \prod_{k=1}^{K} \theta_k^*$
+""",
+            "Malmquist": r"""
+**Malmquist Productivity Index:**
+$$M_{t,t+1} = \left[ \frac{D^t(x^{t+1}, y^{t+1})}{D^t(x^t, y^t)} \cdot \frac{D^{t+1}(x^{t+1}, y^{t+1})}{D^{t+1}(x^t, y^t)} \right]^{1/2}$$
+
+技術効率変化 (EFFCH):
+$$EFFCH = \frac{D^{t+1}(x^{t+1}, y^{t+1})}{D^t(x^t, y^t)}$$
+
+技術変化 (TECHCH):
+$$TECHCH = \left[ \frac{D^t(x^{t+1}, y^{t+1})}{D^{t+1}(x^{t+1}, y^{t+1})} \cdot \frac{D^t(x^t, y^t)}{D^{t+1}(x^t, y^t)} \right]^{1/2}$$
+""",
+            "Efficiency Ladder": r"""
+**Efficiency Ladder モデル:**
+各DMUを効率性のレベルで階層化:
+
+$$L_k = \{j : \theta_j^* \in [\alpha_k, \alpha_{k+1})\}$$
+
+各階層 $k$ について:
+$$\min \theta$$
+$$\text{s.t. } \sum_{j \in L_k} \lambda_j x_{ij} \leq \theta x_{ip}, \quad i=1,\ldots,m$$
+$$\sum_{j \in L_k} \lambda_j y_{rj} \geq y_{rp}, \quad r=1,\ldots,s$$
+$$\sum_{j \in L_k} \lambda_j = 1$$
+$$\lambda_j \geq 0$$
+""",
+            "Merger Analysis": r"""
+**Merger Analysis モデル:**
+マージ後の効率性:
+
+$$\min \theta^{merged}$$
+$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} \leq \theta^{merged} \sum_{k \in G} x_{ik}, \quad i=1,\ldots,m$$
+$$\sum_{j=1}^{n} \lambda_j y_{rj} \geq \sum_{k \in G} y_{rk}, \quad r=1,\ldots,s$$
+$$\sum_{j=1}^{n} \lambda_j = 1$$
+$$\lambda_j \geq 0$$
+
+ここで、$G$ はマージするDMUのグループ
+""",
+            "Bootstrap DEA": r"""
+**Bootstrap DEA モデル:**
+1. 元のDEA効率性 $\theta_j^*$ を計算
+2. $B$ 回のブートストラップサンプルを生成
+3. 各サンプル $b$ について効率性 $\theta_j^{*(b)}$ を計算
+4. 信頼区間を計算:
+
+$$CI_{1-\alpha} = [\theta_j^{*(lower)}, \theta_j^{*(upper)}]$$
+
+ここで、$\theta_j^{*(lower)}$ と $\theta_j^{*(upper)}$ は $\alpha/2$ と $1-\alpha/2$ 分位数
+""",
+            "Add Min": r"""
+**Additive Min モデル:**
+$$\min \sum_{i=1}^{m} s_i^- + \sum_{r=1}^{s} s_r^+$$
+$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} + s_i^- = x_{ip}, \quad i=1,\ldots,m$$
+$$\sum_{j=1}^{n} \lambda_j y_{rj} - s_r^+ = y_{rp}, \quad r=1,\ldots,s$$
+$$\sum_{j=1}^{n} \lambda_j = 1 \text{ (VRS)}$$
+$$\lambda_j \geq 0, \quad s_i^- \geq 0, \quad s_r^+ \geq 0$$
+
+効率性: $\theta^* = 1 - \frac{\sum s_i^- + \sum s_r^+}{m + s}$
+""",
+            "Add Super-Eff": r"""
+**Additive Super-Efficiency モデル:**
+$$\min \sum_{i=1}^{m} s_i^- + \sum_{r=1}^{s} s_r^+$$
+$$\text{s.t. } \sum_{j \neq p} \lambda_j x_{ij} + s_i^- = x_{ip}, \quad i=1,\ldots,m$$
+$$\sum_{j \neq p} \lambda_j y_{rj} - s_r^+ = y_{rp}, \quad r=1,\ldots,s$$
+$$\sum_{j \neq p} \lambda_j = 1 \text{ (VRS)}$$
+$$\lambda_j \geq 0, \quad s_i^- \geq 0, \quad s_r^+ \geq 0$$
+
+効率性: $\theta^* = 1 + \frac{\sum s_i^- + \sum s_r^+}{m + s}$
+""",
+            "DEA-PS": r"""
+**DEA-PS (Preference Structure) モデル:**
+**Stage 1: 重み付き平均効率性の最小化**
+$$\min \frac{1}{\sum_{i=1}^{m} w_i} \sum_{i=1}^{m} w_i \theta_i$$
+$$\text{s.t. } -\theta_i x_{ip} + \sum_{j=1}^{n} \lambda_j x_{ij} = 0, \quad i=1,\ldots,m$$
+$$\sum_{j=1}^{n} \lambda_j y_{rj} \geq y_{rp}, \quad r=1,\ldots,s$$
+$$\sum_{j=1}^{n} \lambda_j = 1 \text{ (VRS)}$$
+$$\lambda_j \geq 0, \quad \theta_i \geq 0$$
+
+**Stage 2: スラックの最大化**
+$$\max \sum_{i=1}^{m} w_i^s s_i^- + \sum_{r=1}^{s} w_r^s s_r^+$$
+""",
+            "StoNED": r"""
+**StoNED (Stochastic Non-smooth Envelopment of Data) モデル:**
+$$y_j = f(x_j) \exp(v_j - u_j)$$
+
+ここで:
+- $f(x_j)$ は生産フロンティア
+- $v_j \sim N(0, \sigma_v^2)$ はランダムノイズ
+- $u_j \geq 0$ は非効率性項
+
+推定:
+$$\min \sum_{j=1}^{n} (y_j - \hat{y}_j)^2$$
+$$\text{s.t. } \hat{y}_j = \sum_{k=1}^{n} \lambda_k y_k \exp(\beta^T (x_j - x_k))$$
+$$\sum_{k=1}^{n} \lambda_k = 1 \text{ (VRS)}$$
+$$\lambda_k \geq 0$$
+
+効率性: $EFF_j = \exp(-E[u_j | \epsilon_j])$
+"""
+        }
+        
+        if model_type in model_formulations:
+            st.latex(model_formulations[model_type])
+        else:
+            st.info(f"{model_type}モデルの定式化は準備中です。")
         
         if st.button("分析を実行", type="primary"):
             try:
