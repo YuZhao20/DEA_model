@@ -1,11 +1,10 @@
 """
-Test script for DEA models using the example from Table 3.1
+Test script for DEA models using the example from Table 3.1 and Table 4.1
 """
 
 import numpy as np
 import pandas as pd
-from dea.ccr import CCRModel
-from dea.bcc import BCCModel
+from dea import CCRModel, BCCModel, APModel, MAJModel
 
 # Data from Table 3.1
 data = np.array([
@@ -52,4 +51,39 @@ print("Input-Oriented BCC Multiplier Model Results")
 print("=" * 80)
 bcc_mult_results = bcc_model.evaluate_all(method='multiplier')
 print(bcc_mult_results.to_string(index=False))
+print("\n")
+
+print("=" * 80)
+print("Chapter 4: Advanced DEA Models")
+print("=" * 80)
+print("\n")
+
+print("=" * 80)
+print("Input-Oriented AP Envelopment Model Results (Super-Efficiency)")
+print("=" * 80)
+ap_model = APModel(inputs, outputs)
+ap_input_env_results = ap_model.evaluate_all(orientation='input', method='envelopment')
+print(ap_input_env_results.to_string(index=False))
+print("\n")
+
+print("=" * 80)
+print("Output-Oriented AP Envelopment Model Results (Super-Efficiency)")
+print("=" * 80)
+ap_output_env_results = ap_model.evaluate_all(orientation='output', method='envelopment')
+print(ap_output_env_results.to_string(index=False))
+print("\n")
+
+print("=" * 80)
+print("Input-Oriented AP Multiplier Model Results (Super-Efficiency)")
+print("=" * 80)
+ap_input_mult_results = ap_model.evaluate_all(orientation='input', method='multiplier')
+print(ap_input_mult_results.to_string(index=False))
+print("\n")
+
+print("=" * 80)
+print("MAJ Super-Efficiency Model Results")
+print("=" * 80)
+maj_model = MAJModel(inputs, outputs)
+maj_results = maj_model.evaluate_all()
+print(maj_results.to_string(index=False))
 
