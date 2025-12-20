@@ -51,6 +51,8 @@ Data Envelopment Analysis (DEA) implementation in Python based on Hosseinzadeh L
 #### Returns to Scale Models
 - **Returns to Scale - CCR Envelopment Model** (4.5.1)
 - **Returns to Scale - DEA Multiplier Model** (4.5.2)
+- **DRS (Decreasing Returns to Scale) Model** - Based on Benchmarking package
+- **IRS (Increasing Returns to Scale) Model** - Based on Benchmarking package
 
 #### Cost and Revenue Efficiency Models
 - **Cost Efficiency Model** (4.6)
@@ -70,6 +72,10 @@ Data Envelopment Analysis (DEA) implementation in Python based on Hosseinzadeh L
 
 #### Network DEA Models
 - **Series Network DEA Model** (4.10)
+
+#### FDH (Free Disposal Hull) Models
+- **FDH (Free Disposal Hull) Model** - Based on Benchmarking package
+- **FDH+ (Free Disposal Hull Plus) Model** - Based on Benchmarking package
 
 #### Other Advanced Models
 - **Congestion DEA Model** (4.13)
@@ -97,6 +103,8 @@ from dea import (
     MalmquistModel, SBMModel,
     ProfitEfficiencyModel, ModifiedSBMModel,
     SeriesNetworkModel,
+    DRSModel, IRSModel,
+    FDHModel, FDHPlusModel,
     CongestionModel, CommonWeightsModel, DirectionalEfficiencyModel
 )
 
@@ -312,6 +320,18 @@ print(rts_results)
 rts_mult_results = rts_model.evaluate_all(method='multiplier')
 print("Returns to Scale (Multiplier) Results:")
 print(rts_mult_results)
+
+# DRS (Decreasing Returns to Scale) Model
+drs_model = DRSModel(inputs, outputs)
+drs_results = drs_model.evaluate_all(orientation='input')
+print("DRS Results:")
+print(drs_results)
+
+# IRS (Increasing Returns to Scale) Model
+irs_model = IRSModel(inputs, outputs)
+irs_results = irs_model.evaluate_all(orientation='input')
+print("IRS Results:")
+print(irs_results)
 ```
 
 #### 10. Cost and Revenue Efficiency Models
@@ -441,7 +461,25 @@ print(f"Input weights (v): {v_weights}")
 print(f"Objective value: {obj_value:.4f}")
 ```
 
-#### 18. Directional Efficiency Model
+#### 18. FDH (Free Disposal Hull) Models
+
+```python
+# FDHモデルの初期化
+fdh_model = FDHModel(inputs, outputs)
+
+# FDH Envelopment Model
+fdh_results = fdh_model.evaluate_all(orientation='input')
+print("FDH Results:")
+print(fdh_results)
+
+# FDH+ (Free Disposal Hull Plus) Model
+fdh_plus_model = FDHPlusModel(inputs, outputs, param=0.15)
+fdh_plus_results = fdh_plus_model.evaluate_all(orientation='input')
+print("FDH+ Results:")
+print(fdh_plus_results)
+```
+
+#### 19. Directional Efficiency Model
 
 ```python
 # Directional Efficiencyモデルの初期化

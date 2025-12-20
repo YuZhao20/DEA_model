@@ -20,6 +20,8 @@ from .malmquist import MalmquistModel
 from .sbm import SBMModel
 from .profit_network import ProfitEfficiencyModel, ModifiedSBMModel
 from .network import SeriesNetworkModel
+from .rts_models import DRSModel, IRSModel
+from .fdh import FDHModel, FDHPlusModel
 
 __version__ = "1.0.0"
 __all__ = [
@@ -31,6 +33,8 @@ __all__ = [
     "MalmquistModel",
     "SBMModel",
     "ProfitEfficiencyModel", "ModifiedSBMModel",
-    "SeriesNetworkModel"
+    "SeriesNetworkModel",
+    "DRSModel", "IRSModel",
+    "FDHModel", "FDHPlusModel"
 ]
 
