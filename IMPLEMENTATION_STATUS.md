@@ -30,25 +30,25 @@
 - ✓ FDH (Free Disposal Hull) Model
 - ✓ FDH+ (Free Disposal Hull Plus) Model
 
-## 未実装モデル（第3章・第4章に含まれていない）
+## 追加実装モデル（Benchmarkingパッケージから）
 
-以下のモデルはBenchmarkingパッケージには存在しますが、第3章・第4章には含まれていません：
+以下のモデルをBenchmarkingパッケージを参考に実装しました：
 
-1. **MEA (Multi-directional Efficiency Analysis)**
+1. **MEA (Multi-directional Efficiency Analysis)** ✓
    - 多方向効率分析
-   - 第3章・第4章には含まれていない
+   - 各入力/出力方向の潜在的な改善を計算
 
-2. **eladder (Efficiency Ladder)**
+2. **Efficiency Ladder** ✓
    - 効率ラダー分析
-   - 第3章・第4章には含まれていない
+   - ピアを順次削除して効率の変化を追跡
 
-3. **dea.merge (Merger Analysis)**
+3. **Merger Analysis** ✓
    - 合併分析
-   - 第3章・第4章には含まれていない
+   - 合併による効率改善を分解（Learning, Harmony, Size effects）
 
-4. **dea.boot (Bootstrap DEA)**
+4. **Bootstrap DEA** ✓
    - ブートストラップDEA
-   - 第3章・第4章には含まれていない
+   - 効率スコアの信頼区間とバイアス補正を提供
 
 ## 整合性チェック結果
 

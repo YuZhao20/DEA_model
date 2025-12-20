@@ -83,6 +83,12 @@ Data Envelopment Analysis (DEA) implementation in Python based on Hosseinzadeh L
 - **Directional Efficiency DEA Model** (4.15)
 - **Profit Efficiency Model** (4.11)
 
+#### Additional Models from Benchmarking Package
+- **MEA (Multi-directional Efficiency Analysis)** - Based on Benchmarking package
+- **Efficiency Ladder Analysis** - Based on Benchmarking package
+- **Merger Analysis** - Based on Benchmarking package
+- **Bootstrap DEA** - Based on Benchmarking package
+
 ## インストール
 
 ```bash
@@ -105,6 +111,8 @@ from dea import (
     SeriesNetworkModel,
     DRSModel, IRSModel,
     FDHModel, FDHPlusModel,
+    MEAModel, EfficiencyLadderModel,
+    MergerAnalysisModel, BootstrapDEAModel,
     CongestionModel, CommonWeightsModel, DirectionalEfficiencyModel
 )
 
@@ -479,7 +487,66 @@ print("FDH+ Results:")
 print(fdh_plus_results)
 ```
 
-#### 19. Directional Efficiency Model
+#### 19. MEA (Multi-directional Efficiency Analysis)
+
+```python
+# MEAモデルの初期化
+mea_model = MEAModel(inputs, outputs, rts='vrs')
+
+# MEA Analysis
+mea_results = mea_model.evaluate_all(orientation='input')
+print("MEA Results:")
+print(mea_results)
+```
+
+#### 20. Efficiency Ladder Analysis
+
+```python
+# Efficiency Ladderモデルの初期化
+eladder_model = EfficiencyLadderModel(inputs, outputs, rts='vrs')
+
+# Efficiency Ladder for a specific DMU
+effs, removed, final = eladder_model.solve(0, max_steps=5)
+print(f"Efficiency ladder: {effs}")
+print(f"Removed peers: {removed}")
+
+# Evaluate all DMUs
+eladder_results = eladder_model.evaluate_all()
+print("Efficiency Ladder Results:")
+print(eladder_results)
+```
+
+#### 21. Merger Analysis
+
+```python
+# Merger Analysisモデルの初期化
+merge_model = MergerAnalysisModel(inputs, outputs, rts='vrs')
+
+# Define merger matrix (e.g., merge DMU 0 and DMU 1)
+merger_matrix = np.array([
+    [1, 1, 0, 0, 0, 0, 0, 0, 0, 0],  # Merge DMU 0 and 1
+    [0, 0, 1, 1, 0, 0, 0, 0, 0, 0],  # Merge DMU 2 and 3
+])
+
+# Analyze mergers
+merge_results = merge_model.evaluate_all(merger_matrix, orientation='in')
+print("Merger Analysis Results:")
+print(merge_results)
+```
+
+#### 22. Bootstrap DEA
+
+```python
+# Bootstrap DEAモデルの初期化
+bootstrap_model = BootstrapDEAModel(inputs, outputs, rts='vrs', orientation='in')
+
+# Bootstrap analysis
+bootstrap_results = bootstrap_model.evaluate_all(n_rep=200, alpha=0.05, seed=42)
+print("Bootstrap DEA Results:")
+print(bootstrap_results)
+```
+
+#### 23. Directional Efficiency Model
 
 ```python
 # Directional Efficiencyモデルの初期化
