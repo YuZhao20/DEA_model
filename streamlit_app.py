@@ -134,7 +134,6 @@ if uploaded_file is not None:
                     st.success(f"設定完了: {len(input_cols)} 入力, {len(output_cols)} 出力")
                 else:
                     st.error("入力変数と出力変数を少なくとも1つずつ選択してください")
-        
         except Exception as e:
             st.error(f"エラー: {str(e)}")
 
