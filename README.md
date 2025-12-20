@@ -26,6 +26,10 @@ Data Envelopment Analysis (DEA) implementation in Python based on Hosseinzadeh L
 - **Additive CCR Model** (3.4.1)
 - **Additive BCC Model** (3.4.2)
 
+#### Epsilon-based Multiplier Models
+- **Input-Oriented BCC Multiplier Model with epsilon** (3.5.1)
+- **Input-Oriented CCR Multiplier Model with epsilon** (3.5.2)
+
 #### Two-Phase Models
 - **Two-Phase Input-Oriented BCC Envelopment Model** (3.6.1)
 - **Two-Phase Input-Oriented CCR Envelopment Model** (3.6.2)
