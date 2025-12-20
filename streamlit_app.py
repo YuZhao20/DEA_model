@@ -151,6 +151,10 @@ elif page == "基本モデル":
         orientation = st.selectbox("方向", ["入力指向", "出力指向"], index=0)
         method = st.selectbox("方法", ["包絡モデル", "乗数モデル"], index=0)
         
+        # Additive model type selection
+        if model_type == "Additive":
+            model_type_add = st.selectbox("Additiveタイプ", ["CCR", "BCC"], index=0)
+        
         if st.button("分析を実行", type="primary"):
             try:
                 with st.spinner("計算中..."):
@@ -181,7 +185,6 @@ elif page == "基本モデル":
                     
                     elif model_type == "Additive":
                         model = AdditiveModel(st.session_state.inputs, st.session_state.outputs)
-                        model_type_add = st.selectbox("Additiveタイプ", ["CCR", "BCC"], index=0)
                         results_list = []
                         for i in range(len(st.session_state.inputs)):
                             if model_type_add == "CCR":
@@ -242,6 +245,14 @@ elif page == "高度なモデル":
              "Revenue Efficiency", "Directional Efficiency"]
         )
         
+        # Initialize variables
+        input_costs = None
+        output_prices = None
+        g_inputs = None
+        g_outputs = None
+        sbm_type = "Model 1"
+        ap_orientation = "入力指向"
+        
         if model_type == "Cost Efficiency":
             st.subheader("入力コストの設定")
             cost_input = st.text_input(
@@ -252,6 +263,7 @@ elif page == "高度なモデル":
                 input_costs = np.array([float(x.strip()) for x in cost_input.split(",")])
                 if len(input_costs) != st.session_state.inputs.shape[1]:
                     st.error(f"コストの数が入力変数の数と一致しません（{len(input_costs)} vs {st.session_state.inputs.shape[1]}）")
+                    input_costs = None
                 else:
                     input_costs = np.tile(input_costs, (len(st.session_state.inputs), 1))
             except:
@@ -268,6 +280,7 @@ elif page == "高度なモデル":
                 output_prices = np.array([float(x.strip()) for x in price_input.split(",")])
                 if len(output_prices) != st.session_state.outputs.shape[1]:
                     st.error(f"価格の数が出力変数の数と一致しません（{len(output_prices)} vs {st.session_state.outputs.shape[1]}）")
+                    output_prices = None
                 else:
                     output_prices = np.tile(output_prices, (len(st.session_state.outputs), 1))
             except:
@@ -291,13 +304,18 @@ elif page == "高度なモデル":
                 g_inputs = None
                 g_outputs = None
         
+        if model_type == "AP (Super-Efficiency)":
+            ap_orientation = st.selectbox("方向", ["入力指向", "出力指向"], index=0, key="ap_orient")
+        
+        if model_type == "SBM":
+            sbm_type = st.selectbox("SBMタイプ", ["Model 1", "Model 2"], index=0)
+        
         if st.button("分析を実行", type="primary"):
             try:
                 with st.spinner("計算中..."):
                     if model_type == "AP (Super-Efficiency)":
                         model = APModel(st.session_state.inputs, st.session_state.outputs)
-                        orientation = st.selectbox("方向", ["入力指向", "出力指向"], index=0, key="ap_orient")
-                        if orientation == "入力指向":
+                        if ap_orientation == "入力指向":
                             results = model.evaluate_all(orientation='input', method='envelopment')
                         else:
                             results = model.evaluate_all(orientation='output', method='envelopment')
@@ -308,7 +326,6 @@ elif page == "高度なモデル":
                     
                     elif model_type == "SBM":
                         model = SBMModel(st.session_state.inputs, st.session_state.outputs)
-                        sbm_type = st.selectbox("SBMタイプ", ["Model 1", "Model 2"], index=0)
                         results_list = []
                         for i in range(len(st.session_state.inputs)):
                             if sbm_type == "Model 1":
@@ -322,25 +339,41 @@ elif page == "高度なモデル":
                             })
                         results = pd.DataFrame(results_list)
                     
-                    elif model_type == "Cost Efficiency" and input_costs is not None:
-                        model = CostEfficiencyModel(st.session_state.inputs, st.session_state.outputs, input_costs)
-                        results = model.evaluate_all()
+                    elif model_type == "Cost Efficiency":
+                        if input_costs is not None:
+                            model = CostEfficiencyModel(st.session_state.inputs, st.session_state.outputs, input_costs)
+                            results = model.evaluate_all()
+                        else:
+                            st.error("入力コストを正しく設定してください")
+                            results = None
                     
-                    elif model_type == "Revenue Efficiency" and output_prices is not None:
-                        model = RevenueEfficiencyModel(st.session_state.inputs, st.session_state.outputs, output_prices)
-                        results = model.evaluate_all()
+                    elif model_type == "Revenue Efficiency":
+                        if output_prices is not None:
+                            model = RevenueEfficiencyModel(st.session_state.inputs, st.session_state.outputs, output_prices)
+                            results = model.evaluate_all()
+                        else:
+                            st.error("出力価格を正しく設定してください")
+                            results = None
                     
-                    elif model_type == "Directional Efficiency" and g_inputs is not None and g_outputs is not None:
-                        model = DirectionalEfficiencyModel(st.session_state.inputs, st.session_state.outputs)
-                        results_list = []
-                        for i in range(len(st.session_state.inputs)):
-                            eff, lambdas, input_slacks, output_slacks = model.solve(i, g_inputs, g_outputs)
-                            results_list.append({
-                                'DMU': i+1,
-                                'Directional_Efficiency': eff,
-                                **{f'Lambda_{j+1}': lambdas[j] for j in range(len(lambdas))}
-                            })
-                        results = pd.DataFrame(results_list)
+                    elif model_type == "Directional Efficiency":
+                        if g_inputs is not None and g_outputs is not None:
+                            model = DirectionalEfficiencyModel(st.session_state.inputs, st.session_state.outputs)
+                            results_list = []
+                            for i in range(len(st.session_state.inputs)):
+                                eff, lambdas, input_slacks, output_slacks = model.solve(i, g_inputs, g_outputs)
+                                results_list.append({
+                                    'DMU': i+1,
+                                    'Directional_Efficiency': eff,
+                                    **{f'Lambda_{j+1}': lambdas[j] for j in range(len(lambdas))}
+                                })
+                            results = pd.DataFrame(results_list)
+                        else:
+                            st.error("方向ベクトルを正しく設定してください")
+                            results = None
+                    
+                    if results is not None:
+                        st.session_state.results = results
+                        st.success("分析が完了しました！")
                     
                     st.session_state.results = results
                     st.success("分析が完了しました！")
