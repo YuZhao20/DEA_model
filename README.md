@@ -218,10 +218,15 @@ print(f"Efficiency: {efficiency:.4f}, Total Slack: {total_slack:.4f}")
 
 **主要メソッド**:
 - `solve_input_oriented_envelopment(dmu_index)`: 入力指向包絡モデル
+  - 戻り値: `(efficiency, lambdas)` - スーパー効率スコアとラムダ値
 - `solve_output_oriented_envelopment(dmu_index)`: 出力指向包絡モデル
+  - 戻り値: `(efficiency, lambdas)`
 - `solve_input_oriented_multiplier(dmu_index, epsilon=1e-6)`: 入力指向乗数モデル
+  - 戻り値: `(efficiency, v_weights, u_weights)`
 - `solve_output_oriented_multiplier(dmu_index, epsilon=1e-6)`: 出力指向乗数モデル
+  - 戻り値: `(efficiency, v_weights, u_weights)`
 - `evaluate_all(orientation='input', method='envelopment')`: すべてのDMUを評価
+  - 戻り値: `pd.DataFrame` - 効率スコアとラムダ値を含む
 
 **使用例**:
 ```python
@@ -232,8 +237,9 @@ inputs = np.array([[2, 3], [3, 2], [4, 1], [1, 4]])
 outputs = np.array([[1], [2], [3], [1]])
 
 model = APModel(inputs, outputs)
-efficiency, lambdas, input_slacks, output_slacks = model.solve_input_oriented_envelopment(0)
+efficiency, lambdas = model.solve_input_oriented_envelopment(0)
 print(f"AP Super-Efficiency: {efficiency:.4f}")
+print(f"Lambdas: {lambdas}")
 ```
 
 #### 6. CostEfficiencyModel - コスト効率モデル
