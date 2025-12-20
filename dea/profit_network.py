@@ -69,8 +69,8 @@ class ProfitEfficiencyModel:
         c[:self.n_inputs] = self.input_costs[dmu_index, :]  # cost coefficients (positive for minimization)
         c[self.n_inputs:self.n_inputs + self.n_outputs] = -self.output_prices[dmu_index, :]  # price coefficients (negative)
         
-        # Constraints
-        n_constraints = self.n_inputs + self.n_outputs
+        # Constraints: inputs + outputs + VRS constraint
+        n_constraints = self.n_inputs + self.n_outputs + 1
         A = np.zeros((n_constraints, n_vars))
         
         # Input constraints: sum(lambda_j * x_ij) <= x_i
@@ -83,11 +83,21 @@ class ProfitEfficiencyModel:
             A[self.n_inputs + r, self.n_inputs + r] = 1.0  # y_r
             A[self.n_inputs + r, self.n_inputs + self.n_outputs:] = -self.outputs[:, r]
         
+        # VRS constraint: sum(lambda_j) = 1
+        A[self.n_inputs + self.n_outputs, self.n_inputs + self.n_outputs:] = 1.0
+        
         b = np.zeros(n_constraints)
+        b[self.n_inputs + self.n_outputs] = 1.0  # sum(lambda_j) = 1
+        
+        # Constraint types
+        A_eq = A[self.n_inputs + self.n_outputs:self.n_inputs + self.n_outputs + 1, :]
+        b_eq = b[self.n_inputs + self.n_outputs:self.n_inputs + self.n_outputs + 1]
+        A_ub = A[:self.n_inputs + self.n_outputs, :]
+        b_ub = b[:self.n_inputs + self.n_outputs]
         
         bounds = [(0, None)] * n_vars
         
-        result = linprog(c, A_ub=A, b_ub=b, bounds=bounds, method='highs')
+        result = linprog(c, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method='highs')
         
         if not result.success:
             raise RuntimeError(f"Optimization failed for DMU {dmu_index}: {result.message}")

@@ -88,7 +88,7 @@ if page == "データアップロード":
     
     uploaded_file = st.file_uploader("CSVファイルをアップロード", type=['csv'])
 
-    if uploaded_file is not None:
+if uploaded_file is not None:
         try:
             df = pd.read_csv(uploaded_file)
             st.session_state.data = df
@@ -881,7 +881,7 @@ $$\lambda_j \geq 0, \quad \beta \geq 0$$
                         results_list = []
                         for i in range(len(st.session_state.inputs)):
                             eff, lambdas, input_slacks, output_slacks, directions = model.solve(
-                                i, orientation='input' if orientation == "入力指向" else 'output', rts=rts
+                                i, orientation='in' if orientation == "入力指向" else 'out', rts=rts
                             )
                             results_list.append({
                                 'DMU': i+1,

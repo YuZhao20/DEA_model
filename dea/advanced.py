@@ -101,11 +101,13 @@ class NormL1Model:
         
         # Right-hand side
         b = np.zeros(n_constraints)
+        # Input constraints: b = 0 (already initialized)
+        # Output constraints: b = 0 (already initialized)
         row = self.n_inputs + self.n_outputs
         for i in range(self.n_inputs):
-            b[row + i] = self.inputs[dmu_index, i]
+            b[row + i] = self.inputs[dmu_index, i]  # x_i <= x_ip
         for r in range(self.n_outputs):
-            b[row + self.n_inputs + r] = -self.outputs[dmu_index, r]
+            b[row + self.n_inputs + r] = -self.outputs[dmu_index, r]  # y_r >= y_rp
         
         if rts == 'vrs':
             b[row + self.n_inputs + self.n_outputs] = 1.0
@@ -202,23 +204,34 @@ class CongestionModel:
             A_eq[i, :self.n_dmus] = self.inputs[:, i]
             A_eq[i, self.n_dmus + i] = 1.0
         
-        # Output constraints: sum(lambda_j * y_rj) = y_rp
+        # Output constraints: sum(lambda_j * y_rj) >= y_rp (inequality, not equality)
+        # For congestion, we allow output to be at least y_rp
         for r in range(self.n_outputs):
-            A_eq[self.n_inputs + r, :self.n_dmus] = self.outputs[:, r]
+            A_eq[self.n_inputs + r, :self.n_dmus] = -self.outputs[:, r]  # negative for >= constraint
         
         # Convexity
         A_eq[self.n_inputs + self.n_outputs, :self.n_dmus] = 1.0
         
-        b_eq = np.zeros(n_constraints)
+        # Constraint types: inputs are equality, outputs are inequality
+        A_eq_inputs = A_eq[:self.n_inputs + 1, :]  # inputs + convexity
+        b_eq_inputs = np.zeros(self.n_inputs + 1)
         for i in range(self.n_inputs):
-            b_eq[i] = eff * self.inputs[dmu_index, i]
+            b_eq_inputs[i] = eff * self.inputs[dmu_index, i]
+        b_eq_inputs[self.n_inputs] = 1.0  # convexity
+        
+        A_ub_outputs = A_eq[self.n_inputs:self.n_inputs + self.n_outputs, :]
+        b_ub_outputs = np.zeros(self.n_outputs)
         for r in range(self.n_outputs):
-            b_eq[self.n_inputs + r] = self.outputs[dmu_index, r]
-        b_eq[self.n_inputs + self.n_outputs] = 1.0
+            b_ub_outputs[r] = -self.outputs[dmu_index, r]  # -sum(lambda_j * y_rj) <= -y_rp
+        
+        A_eq = A_eq_inputs
+        b_eq = b_eq_inputs
+        A_ub = A_ub_outputs if A_ub_outputs.shape[0] > 0 else None
+        b_ub = b_ub_outputs if len(b_ub_outputs) > 0 else None
         
         bounds = [(0, None)] * n_vars
         
-        result = linprog(-c, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method='highs')
+        result = linprog(-c, A_eq=A_eq, b_eq=b_eq, A_ub=A_ub, b_ub=b_ub, bounds=bounds, method='highs')
         
         if not result.success:
             raise RuntimeError(f"Optimization failed for DMU {dmu_index}: {result.message}")
@@ -231,7 +244,8 @@ class CongestionModel:
     def evaluate_all(self) -> pd.DataFrame:
         results = []
         for j in range(self.n_dmus):
-            eff, congestion_slacks, congestion_sum = self.solve(j)
+            eff, lambdas, congestion_slacks, output_slacks = self.solve(j)
+            congestion_sum = np.sum(congestion_slacks)
             result_dict = {'DMU': j + 1, 'Efficiency': eff, 'Congestion_Sum': congestion_sum}
             for i in range(self.n_inputs):
                 result_dict[f'Congestion_{i+1}'] = congestion_slacks[i]
