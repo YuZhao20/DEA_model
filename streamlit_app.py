@@ -1235,11 +1235,13 @@ $$\lambda_k \geq 0$$
                         st.info("StoNEDモデルは単一出力のみをサポートします。")
                         if st.session_state.outputs.shape[1] == 1:
                             model = StoNEDModel(st.session_state.inputs, st.session_state.outputs.flatten())
-                            stoned_results = model.solve(rts=rts, method='MM')
+                            stoned_results = model.solve(rts=rts, method='AUTO')
                             results = pd.DataFrame({
                                 'DMU': range(1, len(st.session_state.inputs) + 1),
-                                'Efficiency': stoned_results.get('efficiency', np.ones(len(st.session_state.inputs))),
-                                'Inefficiency': stoned_results.get('inefficiency', np.zeros(len(st.session_state.inputs)))
+                                'Efficiency': stoned_results['eff'],
+                                'Fitted': stoned_results['fit'],
+                                'Frontier': stoned_results['front'],
+                                'Residual': stoned_results['residuals']
                             })
                         else:
                             st.error("StoNEDモデルは単一出力のみをサポートします")
