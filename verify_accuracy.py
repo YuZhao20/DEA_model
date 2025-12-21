@@ -162,16 +162,17 @@ print("5. SBM MODEL VERIFICATION")
 print("=" * 40)
 
 sbm = SBMModel(INPUTS, OUTPUTS)
-sbm_results = sbm.evaluate_all(model_type=1)
+# Use CRS for comparison with CCR (which also uses CRS)
+sbm_results = sbm.evaluate_all(model_type=1, rts='crs')
 sbm_eff = sbm_results['SBM_Efficiency'].values
 
-print("\nSBM Efficiencies:")
+print("\nSBM Efficiencies (CRS):")
 for i, eff in enumerate(sbm_eff):
     print(f"  DMU {i+1}: {eff:.4f}")
 
-# Theoretical: SBM <= CCR (SBM is non-radial, always <= radial)
+# Theoretical: SBM-CRS <= CCR-CRS (SBM is non-radial, always <= radial)
 sbm_le_ccr = np.all(sbm_eff <= ccr_eff + 0.001)
-print(f"\nSBM <= CCR: {'✓ PASS' if sbm_le_ccr else '✗ FAIL'}")
+print(f"\nSBM-CRS <= CCR-CRS: {'✓ PASS' if sbm_le_ccr else '✗ FAIL'}")
 
 # ============================================================================
 # 6. FDH Model Verification
@@ -258,7 +259,7 @@ tests = [
     ("BCC >= CCR", bcc_ge_ccr),
     ("CCR <= DRS", ccr_le_drs),
     ("CCR <= IRS", ccr_le_irs),
-    ("SBM <= CCR", sbm_le_ccr),
+    ("SBM-CRS <= CCR-CRS", sbm_le_ccr),
     ("FDH >= BCC", fdh_ge_bcc),
     ("Cost Efficiency <= 1", cost_bound),
     ("Revenue Efficiency <= 1", rev_bound),

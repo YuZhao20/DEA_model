@@ -35,6 +35,7 @@ from dea import (
     transform_undesirable,
     StoNEDModel
 )
+import warnings
 
 # Test data from Table 3.1 (standard DEA test dataset)
 DATA = np.array([
@@ -752,6 +753,89 @@ def validate_network_model() -> ValidationResult:
     return result
 
 
+def validate_fdh_plus_model() -> ValidationResult:
+    """Validate FDH+ (Free Disposal Hull Plus) model."""
+    result = ValidationResult("FDHPlusModel")
+
+    try:
+        model = FDHPlusModel(INPUTS, OUTPUTS, param=0.15)
+        fdh_plus_results = model.evaluate_all()
+
+        if 'Efficiency' in fdh_plus_results.columns:
+            efficiencies = fdh_plus_results['Efficiency'].values
+            if any(efficiencies > 1.001):
+                result.add_error(f"FDH+ efficiencies > 1: {efficiencies[efficiencies > 1.001]}")
+            if any(efficiencies < 0):
+                result.add_error(f"FDH+ efficiencies < 0: {efficiencies[efficiencies < 0]}")
+            result.add_info(f"FDH+ efficiencies: min={np.min(efficiencies):.4f}, max={np.max(efficiencies):.4f}")
+        else:
+            result.add_info(f"FDH+ model completed with {len(fdh_plus_results)} DMUs")
+
+    except Exception as e:
+        result.add_error(f"Exception: {str(e)}")
+
+    return result
+
+
+def validate_modified_sbm_model() -> ValidationResult:
+    """Validate Modified SBM model."""
+    result = ValidationResult("ModifiedSBMModel")
+
+    try:
+        model = ModifiedSBMModel(INPUTS, OUTPUTS)
+
+        # Test input-oriented
+        input_results = model.evaluate_all(orientation='input')
+        if 'Modified_SBM_Efficiency' in input_results.columns:
+            efficiencies = input_results['Modified_SBM_Efficiency'].values
+            if any(efficiencies > 1.001):
+                result.add_error(f"Modified SBM efficiencies > 1: {efficiencies[efficiencies > 1.001]}")
+            if any(efficiencies < 0):
+                result.add_error(f"Modified SBM efficiencies < 0: {efficiencies[efficiencies < 0]}")
+            result.add_info(f"Modified SBM efficiencies: min={np.min(efficiencies):.4f}, max={np.max(efficiencies):.4f}")
+        else:
+            result.add_info(f"Modified SBM model completed with {len(input_results)} DMUs")
+
+        # Test output-oriented
+        output_results = model.evaluate_all(orientation='output')
+        result.add_info(f"Modified SBM output-oriented completed with {len(output_results)} DMUs")
+
+    except Exception as e:
+        result.add_error(f"Exception: {str(e)}")
+
+    return result
+
+
+def validate_stoned_model() -> ValidationResult:
+    """Validate StoNED (Stochastic Non-smooth Envelopment of Data) model."""
+    result = ValidationResult("StoNEDModel")
+
+    try:
+        # StoNED requires single output
+        single_output = OUTPUTS[:, 0]
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            model = StoNEDModel(INPUTS, single_output)
+            stoned_results = model.evaluate_all(rts='vrs', method='MM')
+
+        if 'Efficiency' in stoned_results.columns:
+            efficiencies = stoned_results['Efficiency'].values
+            # StoNED efficiency can have NaN values if skewness is wrong
+            valid_eff = efficiencies[~np.isnan(efficiencies)]
+            if len(valid_eff) > 0:
+                result.add_info(f"StoNED efficiencies: min={np.min(valid_eff):.4f}, max={np.max(valid_eff):.4f}")
+            else:
+                result.add_warning("StoNED returned all NaN efficiencies (may be due to data skewness)")
+        else:
+            result.add_info(f"StoNED model completed with {len(stoned_results)} DMUs")
+
+    except Exception as e:
+        result.add_error(f"Exception: {str(e)}")
+
+    return result
+
+
 def run_all_validations() -> Dict[str, ValidationResult]:
     """Run all model validations."""
     validations = [
@@ -785,6 +869,9 @@ def run_all_validations() -> Dict[str, ValidationResult]:
         validate_undesirable_transform,
         validate_returns_to_scale_model,
         validate_network_model,
+        validate_fdh_plus_model,
+        validate_modified_sbm_model,
+        validate_stoned_model,
     ]
 
     results = {}
