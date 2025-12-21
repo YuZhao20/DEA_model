@@ -47,7 +47,7 @@ class StoNEDModel:
               method: str = 'MM') -> Dict:
         """
         Solve StoNED Model
-        
+
         Parameters:
         -----------
         rts : str
@@ -57,8 +57,9 @@ class StoNEDModel:
         mult : bool
             If True, multiplicative error term; if False, additive error term
         method : str
-            'MM' for Method of Moments, 'PSL' for Pseudo Likelihood
-        
+            'MM' for Method of Moments, 'PSL' for Pseudo Likelihood,
+            'AUTO' to try MM first and fall back to PSL if skewness is wrong
+
         Returns:
         --------
         results : dict
@@ -76,8 +77,9 @@ class StoNEDModel:
         rts = rts.lower()
         if rts not in ['vrs', 'drs', 'crs', 'irs']:
             raise ValueError(f"Unknown returns to scale: {rts}")
-        
-        if method not in ['MM', 'PSL', 'NONE']:
+
+        method = method.upper()
+        if method not in ['MM', 'PSL', 'AUTO', 'NONE']:
             raise ValueError(f"Unknown method: {method}")
         
         # Determine intercept and multiplicative model
@@ -279,32 +281,46 @@ class StoNEDModel:
             fitted = self.output - resid
         
         # Estimate inefficiency (sigma_u, sigma_v)
-        if method == 'MM':
+        use_psl_fallback = False
+
+        if method in ['MM', 'AUTO']:
             M2 = np.mean((resid - np.mean(resid))**2)
             M3 = np.mean((resid - np.mean(resid))**3)
-            
+
             if cost:
                 M3 = -M3
-            
+
             if M3 > 0:
-                warnings.warn("Wrong skewness? Third moment of residuals is greater than 0")
-            
+                if method == 'AUTO':
+                    # Silently fall back to PSL
+                    use_psl_fallback = True
+                else:
+                    warnings.warn("Wrong skewness? Third moment of residuals is greater than 0")
+
             # Estimate sigma_u and sigma_v
-            if M3 < 0:
+            if M3 < 0 and not use_psl_fallback:
                 sigma_u = (abs(M3) / (np.sqrt(2 / np.pi) * (1 - 4 / np.pi)))**(1/3)
                 sigma_v_sq = M2 - ((np.pi - 2) / np.pi) * sigma_u**2
                 if sigma_v_sq > 0:
                     sigma_v = np.sqrt(sigma_v_sq)
                 else:
-                    sigma_v = np.sqrt(M2)  # Fallback
-                    warnings.warn("Negative variance in MM estimation, using fallback")
-            else:
+                    if method == 'AUTO':
+                        use_psl_fallback = True
+                    else:
+                        sigma_v = np.sqrt(M2)  # Fallback
+                        warnings.warn("Negative variance in MM estimation, using fallback")
+            elif not use_psl_fallback:
                 # If M3 is positive or zero, cannot estimate properly
-                sigma_u = np.nan
-                sigma_v = np.nan
-            lambda_param = sigma_u / sigma_v if (not np.isnan(sigma_v) and sigma_v > 0) else np.nan
-        
-        elif method == 'PSL':
+                if method == 'AUTO':
+                    use_psl_fallback = True
+                else:
+                    sigma_u = np.nan
+                    sigma_v = np.nan
+
+            if not use_psl_fallback:
+                lambda_param = sigma_u / sigma_v if (not np.isnan(sigma_v) and sigma_v > 0) else np.nan
+
+        if method == 'PSL' or use_psl_fallback:
             # Pseudo likelihood estimation
             def neg_log_likelihood(lambda_param, e):
                 sc = np.sqrt(2 * lambda_param**2 / np.pi / (1 + lambda_param**2))
@@ -329,7 +345,8 @@ class StoNEDModel:
             sig_sq = np.mean(resid**2) / (1 - sc**2)
             sigma_v = np.sqrt(sig_sq / (1 + lambda_param**2))
             sigma_u = sigma_v * lambda_param
-        else:  # METHOD == 'NONE'
+
+        if method == 'NONE':
             sigma_u = np.nan
             sigma_v = np.nan
             lambda_param = np.nan
@@ -408,8 +425,8 @@ class StoNEDModel:
         }
     
     def evaluate_all(self, rts: str = 'vrs', cost: bool = False,
-                    mult: bool = False, method: str = 'MM') -> pd.DataFrame:
-        """Evaluate all DMUs"""
+                    mult: bool = False, method: str = 'AUTO') -> pd.DataFrame:
+        """Evaluate all DMUs using AUTO method (tries MM, falls back to PSL)"""
         results = self.solve(rts, cost, mult, method)
         
         df = pd.DataFrame({

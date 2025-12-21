@@ -817,16 +817,21 @@ def validate_stoned_model() -> ValidationResult:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             model = StoNEDModel(INPUTS, single_output)
-            stoned_results = model.evaluate_all(rts='vrs', method='MM')
+            # Use AUTO method (tries MM, falls back to PSL if skewness is wrong)
+            stoned_results = model.evaluate_all(rts='vrs', method='AUTO')
 
         if 'Efficiency' in stoned_results.columns:
             efficiencies = stoned_results['Efficiency'].values
-            # StoNED efficiency can have NaN values if skewness is wrong
+            # StoNED efficiency can have NaN values if optimization fails
             valid_eff = efficiencies[~np.isnan(efficiencies)]
             if len(valid_eff) > 0:
+                if any(valid_eff > 1.001):
+                    result.add_error(f"StoNED efficiencies > 1: {valid_eff[valid_eff > 1.001]}")
+                if any(valid_eff < 0):
+                    result.add_error(f"StoNED efficiencies < 0: {valid_eff[valid_eff < 0]}")
                 result.add_info(f"StoNED efficiencies: min={np.min(valid_eff):.4f}, max={np.max(valid_eff):.4f}")
             else:
-                result.add_warning("StoNED returned all NaN efficiencies (may be due to data skewness)")
+                result.add_warning("StoNED returned all NaN efficiencies")
         else:
             result.add_info(f"StoNED model completed with {len(stoned_results)} DMUs")
 
