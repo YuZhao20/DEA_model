@@ -892,42 +892,29 @@ $$\lambda_j \geq 0, \quad \beta \geq 0$$
                     
                     elif model_type == "Cross Efficiency":
                         model = CrossEfficiencyModel(st.session_state.inputs, st.session_state.outputs)
-                        cross_results = model.solve(
+                        results = model.evaluate_all(
                             orientation='io' if orientation == "入力指向" else 'oo',
                             rts=rts
                         )
-                        results = pd.DataFrame({
-                            'DMU': range(1, len(st.session_state.inputs) + 1),
-                            'Cross_Efficiency': cross_results['average_scores']
-                        })
                     
                     elif model_type == "Non-Radial":
                         model = NonRadialModel(st.session_state.inputs, st.session_state.outputs)
                         results_list = []
                         for i in range(len(st.session_state.inputs)):
-                            eff, lambdas, input_slacks, output_slacks = model.solve(
-                                i, orientation='input' if orientation == "入力指向" else 'output', rts=rts
+                            mean_eff, theta, lambdas, slack, target_in, target_out = model.solve(
+                                i, orientation='io' if orientation == "入力指向" else 'oo', rts=rts
                             )
                             results_list.append({
                                 'DMU': i+1,
-                                'NonRadial_Efficiency': eff,
+                                'Mean_Efficiency': mean_eff,
+                                **{f'Theta_{j+1}': theta[j] for j in range(len(theta))},
                                 **{f'Lambda_{j+1}': lambdas[j] for j in range(len(lambdas))}
                             })
                         results = pd.DataFrame(results_list)
                     
                     elif model_type == "LGO":
                         model = LGOModel(st.session_state.inputs, st.session_state.outputs)
-                        results_list = []
-                        for i in range(len(st.session_state.inputs)):
-                            eff, lambdas, input_slacks, output_slacks = model.solve(
-                                i, orientation='input' if orientation == "入力指向" else 'output', rts=rts
-                            )
-                            results_list.append({
-                                'DMU': i+1,
-                                'LGO_Efficiency': eff,
-                                **{f'Lambda_{j+1}': lambdas[j] for j in range(len(lambdas))}
-                            })
-                        results = pd.DataFrame(results_list)
+                        results = model.evaluate_all(rts=rts)
                     
                     elif model_type == "RDM":
                         model = RDMModel(st.session_state.inputs, st.session_state.outputs)

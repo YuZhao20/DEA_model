@@ -508,8 +508,10 @@ print(f"MEA Efficiency: {efficiency:.4f}")
 - `outputs`: `(n_dmus, n_outputs)` 形状のNumPy配列
 
 **主要メソッド**:
-- `solve(orientation='io', rts='crs', epsilon=0.0, selfapp=True, correction=False, M2=True, M3=True)`: クロス効率を計算
-  - 戻り値: 辞書（`cross_efficiency_matrix`, `average_scores`, `self_efficiency`など）
+- `solve(orientation='io', rts='crs', ...)`: 詳細なクロス効率結果を計算
+  - 戻り値: 辞書（`Arbitrary`キー内に`cross_eff`行列、`e`平均スコアなど）
+- `evaluate_all(orientation='io', rts='crs')`: すべてのDMUを評価
+  - 戻り値: `pd.DataFrame` - DMU、Cross_Efficiency、Self_Efficiencyを含む
 
 **使用例**:
 ```python
@@ -520,9 +522,15 @@ inputs = np.array([[2, 3], [3, 2], [4, 1], [1, 4]])
 outputs = np.array([[1], [2], [3], [1]])
 
 model = CrossEfficiencyModel(inputs, outputs)
-results = model.solve(orientation='io', rts='crs')
-print(f"Cross-Efficiency Matrix:\n{results['cross_efficiency_matrix']}")
-print(f"Average Scores: {results['average_scores']}")
+
+# 簡単な評価（推奨）
+results = model.evaluate_all(orientation='io', rts='crs')
+print(results)
+
+# 詳細な結果
+detailed = model.solve(orientation='io', rts='crs')
+print(f"Cross-Efficiency Matrix:\n{detailed['Arbitrary']['cross_eff']}")
+print(f"Average Scores: {detailed['Arbitrary']['e']}")
 ```
 
 #### 16. StoNEDModel - StoNED (Stochastic Non-smooth Envelopment of Data)
