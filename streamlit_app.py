@@ -920,12 +920,13 @@ $$\lambda_j \geq 0, \quad \beta \geq 0$$
                         model = RDMModel(st.session_state.inputs, st.session_state.outputs)
                         results_list = []
                         for i in range(len(st.session_state.inputs)):
-                            eff, lambdas, input_slacks, output_slacks = model.solve(
-                                i, orientation='input' if orientation == "入力指向" else 'output', rts=rts
+                            rho, beta, lambdas, target_input, target_output = model.solve(
+                                i, orientation='io' if orientation == "入力指向" else 'oo'
                             )
                             results_list.append({
                                 'DMU': i+1,
-                                'RDM_Efficiency': eff,
+                                'RDM_Efficiency': rho,
+                                'Beta': beta,
                                 **{f'Lambda_{j+1}': lambdas[j] for j in range(len(lambdas))}
                             })
                         results = pd.DataFrame(results_list)
@@ -1160,8 +1161,7 @@ $$\lambda_k \geq 0$$
                     
                     elif model_type == "Series Network":
                         st.warning("Series Networkモデルには中間製品データが必要です。現在は基本的な実装のみサポートします。")
-                        # For now, use regular DEA as fallback
-                        from .bcc import BCCModel
+                        # For now, use regular BCC DEA as fallback
                         model = BCCModel(st.session_state.inputs, st.session_state.outputs)
                         results = model.evaluate_all(method='envelopment')
                     
