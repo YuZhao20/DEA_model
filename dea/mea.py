@@ -216,8 +216,9 @@ class MEAModel:
     def evaluate_all(self, orientation: str = 'in') -> pd.DataFrame:
         results = []
         for j in range(self.n_dmus):
-            eff, directions, lambdas = self.solve(j, orientation)
-            
+            # solve returns 5 values: eff, lambdas, input_slacks, output_slacks, directions
+            eff, lambdas, input_slacks, output_slacks, directions = self.solve(j, orientation)
+
             result_dict = {'DMU': j + 1, 'Efficiency': eff}
             if orientation == 'in':
                 for i in range(self.n_inputs):

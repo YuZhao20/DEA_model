@@ -31,14 +31,18 @@ class FDHModel:
     def solve_envelopment(self, dmu_index: int) -> Tuple[float, np.ndarray, np.ndarray, np.ndarray]:
         """
         Solve Input-Oriented FDH Envelopment Model
-        
+
         For FDH, we find the DMU that dominates the evaluated DMU
-        and has the minimum input ratio.
-        
+        and has the minimum input contraction factor.
+
+        Input-oriented efficiency: theta = min{theta : theta*x_p >= x_j, y_j >= y_p}
+        This means we find the minimum scaling factor such that a reference DMU
+        can produce at least the same outputs with at most theta*x_p inputs.
+
         Returns:
         --------
         efficiency : float
-            Efficiency score
+            Efficiency score (0 to 1 for input-oriented)
         lambdas : np.ndarray
             Intensity variables (only one lambda = 1 for the peer)
         input_targets : np.ndarray
@@ -48,44 +52,38 @@ class FDHModel:
         """
         x_p = self.inputs[dmu_index, :]
         y_p = self.outputs[dmu_index, :]
-        
-        best_eff = np.inf
-        best_peer = None
-        
-        # Find DMUs that dominate (have less inputs and more outputs)
-        # For FDH, we need to find the best peer that dominates
+
+        best_eff = 1.0  # Start with 1 (efficient)
+        best_peer = dmu_index
+
+        # Find DMUs that dominate output-wise (produce at least as much output)
         for j in range(self.n_dmus):
-            if j == dmu_index:
-                continue
-                
             x_j = self.inputs[j, :]
             y_j = self.outputs[j, :]
-            
-            # Check if DMU j dominates DMU p
-            # For input orientation: x_j <= x_p and y_j >= y_p
-            if np.all(x_j <= x_p + 1e-10) and np.all(y_j >= y_p - 1e-10):
-                # Calculate efficiency as max ratio of inputs
-                # This is the input-oriented FDH efficiency
-                ratios = np.where(x_j > 1e-10, x_p / x_j, np.inf)
+
+            # Check if DMU j produces at least as much output as DMU p
+            if np.all(y_j >= y_p - 1e-10):
+                # Calculate efficiency as max ratio x_j / x_p
+                # This is the minimum theta such that theta*x_p >= x_j
+                # i.e., theta = max_i(x_ji / x_pi)
+                ratios = np.where(x_p > 1e-10, x_j / x_p, 0.0)
                 eff = np.max(ratios)
-                
+
+                # We want the minimum efficiency (best contraction)
                 if eff < best_eff:
                     best_eff = eff
                     best_peer = j
-        
-        if best_peer is None:
-            # No dominating DMU found, check if DMU itself is efficient
-            # For FDH, if no other DMU dominates it, it's efficient
-            best_eff = 1.0
-            best_peer = dmu_index
-        
+
+        # Ensure efficiency is at most 1
+        best_eff = min(best_eff, 1.0)
+
         # Create lambda vector (only the peer has lambda = 1)
         lambdas = np.zeros(self.n_dmus)
         lambdas[best_peer] = 1.0
-        
+
         input_targets = self.inputs[best_peer, :]
         output_targets = self.outputs[best_peer, :]
-        
+
         return best_eff, lambdas, input_targets, output_targets
     
     def solve_output_oriented_envelopment(self, dmu_index: int) -> Tuple[float, np.ndarray, np.ndarray, np.ndarray]:

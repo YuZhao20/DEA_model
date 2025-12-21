@@ -195,3 +195,32 @@ class CrossEfficiencyModel:
             'e': np.mean(cross_eff, axis=0)
         }
 
+    def evaluate_all(self, orientation: str = 'io', rts: str = 'crs') -> pd.DataFrame:
+        """
+        Evaluate all DMUs using cross-efficiency analysis
+
+        Parameters:
+        -----------
+        orientation : str
+            'io' (input-oriented) or 'oo' (output-oriented)
+        rts : str
+            Returns to scale: 'crs', 'vrs'
+
+        Returns:
+        --------
+        pd.DataFrame
+            DataFrame with cross-efficiency scores for all DMUs
+        """
+        results = self.solve(orientation=orientation, rts=rts)
+        arbitrary = results['Arbitrary']
+
+        df_data = []
+        for j in range(self.n_dmus):
+            df_data.append({
+                'DMU': j + 1,
+                'Cross_Efficiency': arbitrary['e'][j],
+                'Self_Efficiency': arbitrary['cross_eff'][j, j]
+            })
+
+        return pd.DataFrame(df_data)
+

@@ -215,6 +215,36 @@ class AddSuperEffModel:
         
         target_input = input_ref @ result.x[:n_ref]
         target_output = output_ref @ result.x[:n_ref]
-        
+
         return delta, objval, lambdas_full, t_input, t_output, target_input, target_output
+
+    def evaluate_all(self, rts: str = 'crs', orientation: str = None) -> pd.DataFrame:
+        """
+        Evaluate all DMUs using Additive Super-Efficiency model
+
+        Parameters:
+        -----------
+        rts : str
+            Returns to scale: 'crs', 'vrs', 'nirs', 'ndrs', 'grs'
+        orientation : str, optional
+            'io' (input-oriented) or 'oo' (output-oriented)
+
+        Returns:
+        --------
+        pd.DataFrame
+            DataFrame with super-efficiency scores for all DMUs
+        """
+        results = []
+        for j in range(self.n_dmus):
+            delta, objval, lambdas, t_input, t_output, target_input, target_output = \
+                self.solve(j, rts=rts, orientation=orientation)
+
+            result_dict = {
+                'DMU': j + 1,
+                'Super_Efficiency': delta,
+                'Objective': objval
+            }
+            results.append(result_dict)
+
+        return pd.DataFrame(results)
 

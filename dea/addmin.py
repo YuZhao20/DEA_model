@@ -143,6 +143,39 @@ class AddMinModel:
         
         target_input = self.inputs.T @ lambdas
         target_output = self.outputs.T @ lambdas
-        
+
         return objval, lambdas, slack_input, slack_output, target_input, target_output
+
+    def evaluate_all(self, rts: str = 'vrs', orientation: str = None) -> pd.DataFrame:
+        """
+        Evaluate all DMUs using AddMin model
+
+        Parameters:
+        -----------
+        rts : str
+            Returns to scale: 'crs', 'vrs', 'nirs', 'ndrs'
+        orientation : str, optional
+            'io' (input-oriented) or 'oo' (output-oriented)
+
+        Returns:
+        --------
+        pd.DataFrame
+            DataFrame with efficiency scores for all DMUs
+        """
+        results = []
+        for j in range(self.n_dmus):
+            objval, lambdas, slack_input, slack_output, target_input, target_output = \
+                self.solve(j, rts=rts, orientation=orientation)
+
+            result_dict = {
+                'DMU': j + 1,
+                'Objective': objval
+            }
+            for i in range(self.n_inputs):
+                result_dict[f'Slack_Input_{i+1}'] = slack_input[i]
+            for r in range(self.n_outputs):
+                result_dict[f'Slack_Output_{r+1}'] = slack_output[r]
+            results.append(result_dict)
+
+        return pd.DataFrame(results)
 

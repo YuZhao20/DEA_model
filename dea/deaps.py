@@ -270,3 +270,38 @@ class DEAPSModel:
         return self._solve_input_oriented(dmu_index, rts, weight_eff, restricted_eff,
                                          maxslack, weight_slack, L, U)
 
+    def evaluate_all(self, orientation: str = 'io', rts: str = 'vrs') -> pd.DataFrame:
+        """
+        Evaluate all DMUs using DEA-PS model
+
+        Parameters:
+        -----------
+        orientation : str
+            'io' (input-oriented) or 'oo' (output-oriented)
+        rts : str
+            Returns to scale: 'crs', 'vrs', 'nirs', 'ndrs', 'grs'
+
+        Returns:
+        --------
+        pd.DataFrame
+            DataFrame with efficiency scores for all DMUs
+        """
+        results = []
+        for j in range(self.n_dmus):
+            mean_eff, theta, lambdas, slack, target_input, target_output = \
+                self.solve(j, orientation=orientation, rts=rts)
+
+            result_dict = {
+                'DMU': j + 1,
+                'Mean_Efficiency': mean_eff
+            }
+            if orientation == 'io':
+                for i in range(self.n_inputs):
+                    result_dict[f'Theta_{i+1}'] = theta[i]
+            else:
+                for r in range(self.n_outputs):
+                    result_dict[f'Phi_{r+1}'] = theta[r]
+            results.append(result_dict)
+
+        return pd.DataFrame(results)
+

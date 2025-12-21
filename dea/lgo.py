@@ -251,7 +251,43 @@ class LGOModel:
         
         target_input = effproj_input + slack_input
         target_output = effproj_output - slack_output
-        
+
         return (rho, beta, lambdas, target_input, target_output,
                slack_input, slack_output, effproj_input, effproj_output)
+
+    def evaluate_all(self, d_input: np.ndarray = None, d_output: np.ndarray = None,
+                     rts: str = 'vrs') -> pd.DataFrame:
+        """
+        Evaluate all DMUs using LGO model
+
+        Parameters:
+        -----------
+        d_input : np.ndarray, optional
+            Input orientation parameters
+        d_output : np.ndarray, optional
+            Output orientation parameters
+        rts : str
+            Returns to scale: 'crs', 'vrs', 'nirs', 'ndrs', 'grs'
+
+        Returns:
+        --------
+        pd.DataFrame
+            DataFrame with efficiency scores for all DMUs
+        """
+        results = []
+        for j in range(self.n_dmus):
+            rho, beta, lambdas, target_input, target_output, \
+                slack_input, slack_output, effproj_input, effproj_output = \
+                self.solve(j, d_input, d_output, rts)
+
+            result_dict = {
+                'DMU': j + 1,
+                'Efficiency': rho,
+                'Beta': beta
+            }
+            for i, lam in enumerate(lambdas):
+                result_dict[f'Lambda_{i+1}'] = lam
+            results.append(result_dict)
+
+        return pd.DataFrame(results)
 

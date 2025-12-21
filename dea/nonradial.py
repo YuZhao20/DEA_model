@@ -87,19 +87,19 @@ class NonRadialModel:
         n_constraints = self.n_inputs + self.n_outputs + self.n_inputs
         A_ub = np.zeros((n_constraints, n_vars))
         b_ub = np.zeros(n_constraints)
-        
-        # Input constraints: -theta_i * x_ip + sum(lambda_j * x_ij) >= 0
-        # For linprog: theta_i * x_ip - sum(lambda_j * x_ij) <= 0
+
+        # Input constraints: sum(lambda_j * x_ij) <= theta_i * x_ip
+        # For linprog: sum(lambda_j * x_ij) - theta_i * x_ip <= 0
         for i in range(self.n_inputs):
-            A_ub[i, i] = x_p[i]
-            A_ub[i, self.n_inputs:] = -self.inputs[:, i]
-        
+            A_ub[i, i] = -x_p[i]  # -theta_i * x_ip
+            A_ub[i, self.n_inputs:] = self.inputs[:, i]  # sum(lambda_j * x_ij)
+
         # Output constraints: sum(lambda_j * y_rj) >= y_rp
         # For linprog: -sum(lambda_j * y_rj) <= -y_rp
         for r in range(self.n_outputs):
             A_ub[self.n_inputs + r, self.n_inputs:] = -self.outputs[:, r]
             b_ub[self.n_inputs + r] = -y_p[r]
-        
+
         # Theta constraints: theta_i <= 1
         for i in range(self.n_inputs):
             A_ub[self.n_inputs + self.n_outputs + i, i] = 1.0
