@@ -12,26 +12,14 @@ from io import StringIO
 
 # Import all DEA models
 from dea import (
-    CCRModel, BCCModel, APModel, MAJModel,
-    AdditiveModel, TwoPhaseModel,
-    NormL1Model, CongestionModel, CommonWeightsModel, DirectionalEfficiencyModel,
+    CCRModel, BCCModel, APModel,
+    DirectionalEfficiencyModel,
     ReturnsToScaleModel,
     CostEfficiencyModel, RevenueEfficiencyModel,
     MalmquistModel,
     SBMModel,
-    ProfitEfficiencyModel, ModifiedSBMModel,
-    SeriesNetworkModel,
-    DRSModel, IRSModel,
-    FDHModel, FDHPlusModel,
-    MEAModel,
-    EfficiencyLadderModel,
-    MergerAnalysisModel,
     BootstrapDEAModel,
-    NonRadialModel, LGOModel, RDMModel,
-    AddMinModel, AddSuperEffModel, DEAPSModel,
-    CrossEfficiencyModel,
-    transform_undesirable,
-    StoNEDModel
+    CrossEfficiencyModel
 )
 
 # Page configuration
@@ -289,7 +277,7 @@ elif page == "基本モデル":
     else:
         model_type = st.selectbox(
             "モデルを選択",
-            ["CCR", "BCC", "Additive", "Two-Phase"]
+            ["CCR", "BCC"]
         )
         
         orientation = st.selectbox("方向", ["入力指向", "出力指向"], index=0)
@@ -309,11 +297,6 @@ elif page == "基本モデル":
             
             実用上は、差が10^-6以下であれば同じ結果と見なせます。
             """)
-        
-        # Additive model type selection
-        model_type_add = "CCR"
-        if model_type == "Additive":
-            model_type_add = st.selectbox("Additiveタイプ", ["CCR", "BCC"], index=0)
         
         # モデル定式化の表示
         st.subheader("📐 モデル定式化")
@@ -344,35 +327,6 @@ $$\max \sum_{r=1}^{s} u_r y_{rp} + u_0$$
 $$\text{s.t. } \sum_{r=1}^{s} u_r y_{rj} - \sum_{i=1}^{m} v_i x_{ij} + u_0 \leq 0, \quad j=1,\ldots,n$$
 $$\sum_{i=1}^{m} v_i x_{ip} = 1$$
 $$u_r \geq \epsilon, \quad v_i \geq \epsilon$$
-""",
-            "Additive": r"""
-**Additive CCRモデル:**
-$$\max \sum_{i=1}^{m} s_i^- + \sum_{r=1}^{s} s_r^+$$
-$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} + s_i^- = x_{ip}, \quad i=1,\ldots,m$$
-$$\sum_{j=1}^{n} \lambda_j y_{rj} - s_r^+ = y_{rp}, \quad r=1,\ldots,s$$
-$$\lambda_j \geq 0, \quad s_i^- \geq 0, \quad s_r^+ \geq 0$$
-
-**Additive BCCモデル:**
-$$\max \sum_{i=1}^{m} s_i^- + \sum_{r=1}^{s} s_r^+$$
-$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} + s_i^- = x_{ip}, \quad i=1,\ldots,m$$
-$$\sum_{j=1}^{n} \lambda_j y_{rj} - s_r^+ = y_{rp}, \quad r=1,\ldots,s$$
-$$\sum_{j=1}^{n} \lambda_j = 1$$
-$$\lambda_j \geq 0, \quad s_i^- \geq 0, \quad s_r^+ \geq 0$$
-""",
-            "Two-Phase": r"""
-**Phase 1: 効率性の最大化**
-$$\min \theta$$
-$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} \leq \theta x_{ip}, \quad i=1,\ldots,m$$
-$$\sum_{j=1}^{n} \lambda_j y_{rj} \geq y_{rp}, \quad r=1,\ldots,s$$
-$$\sum_{j=1}^{n} \lambda_j = 1$$
-$$\lambda_j \geq 0$$
-
-**Phase 2: スラックの最大化**
-$$\max \sum_{i=1}^{m} s_i^- + \sum_{r=1}^{s} s_r^+$$
-$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} + s_i^- = \theta^* x_{ip}, \quad i=1,\ldots,m$$
-$$\sum_{j=1}^{n} \lambda_j y_{rj} - s_r^+ = y_{rp}, \quad r=1,\ldots,s$$
-$$\sum_{j=1}^{n} \lambda_j = 1$$
-$$\lambda_j \geq 0, \quad s_i^- \geq 0, \quad s_r^+ \geq 0$$
 """
         }
         
@@ -415,34 +369,6 @@ $$\lambda_j \geq 0, \quad s_i^- \geq 0, \quad s_r^+ \geq 0$$
                         else:
                             results = model.evaluate_all(method='multiplier')
                     
-                    elif model_type == "Additive":
-                        model = AdditiveModel(st.session_state.inputs, st.session_state.outputs)
-                        results_list = []
-                        for i in range(len(st.session_state.inputs)):
-                            if model_type_add == "CCR":
-                                slack, lambdas, input_slacks, output_slacks = model.solve_ccr(i)
-                            else:
-                                slack, lambdas, input_slacks, output_slacks = model.solve_bcc(i)
-                            results_list.append({
-                                'DMU': i+1,
-                                'Total_Slack': slack,
-                                **{f'Lambda_{j+1}': lambdas[j] for j in range(len(lambdas))}
-                            })
-                        results = pd.DataFrame(results_list)
-                    
-                    elif model_type == "Two-Phase":
-                        model = TwoPhaseModel(st.session_state.inputs, st.session_state.outputs)
-                        results_list = []
-                        for i in range(len(st.session_state.inputs)):
-                            eff, lambdas, input_slacks, output_slacks, total_slack = model.solve(i)
-                            results_list.append({
-                                'DMU': i+1,
-                                'Efficiency': eff,
-                                'Total_Slack': total_slack,
-                                **{f'Lambda_{j+1}': lambdas[j] for j in range(len(lambdas))}
-                            })
-                        results = pd.DataFrame(results_list)
-                    
                     st.session_state.results = results
                     st.success("分析が完了しました！")
             
@@ -473,9 +399,8 @@ elif page == "高度なモデル":
     else:
         model_type = st.selectbox(
             "モデルを選択",
-            ["AP (Super-Efficiency)", "MAJ (Super-Efficiency)", "SBM", "Cost Efficiency", 
-             "Revenue Efficiency", "Directional Efficiency", "Norm L1", "Congestion",
-             "Common Weights", "Returns to Scale"]
+            ["AP (Super-Efficiency)", "SBM", "Cost Efficiency", 
+             "Revenue Efficiency", "Directional Efficiency", "Returns to Scale"]
         )
         
         # Initialize variables
@@ -488,7 +413,7 @@ elif page == "高度なモデル":
         rts = "vrs"
         
         # RTS parameter for models that support it
-        if model_type in ["SBM", "Directional Efficiency", "Norm L1"]:
+        if model_type in ["SBM", "Directional Efficiency"]:
             rts = st.selectbox("規模の収穫", ["vrs", "drs", "crs", "irs"], index=0, key="advanced_rts")
         
         if model_type == "Cost Efficiency":
@@ -573,35 +498,6 @@ $$\sum_{j=1}^{n} \lambda_j y_{rj} \geq y_{rp} + \beta g_{yr}, \quad r=1,\ldots,s
 $$\sum_{j=1}^{n} \lambda_j = 1 \text{ (VRS)}$$
 $$\lambda_j \geq 0, \beta \geq 0$$
 """,
-            "Norm L1": r"""
-$$\min w^+ - w^-$$
-$$\text{s.t. } \sum_{j \neq p} \lambda_j x_{ij} - x_i + w^+ - w^- = 0, \quad i=1,\ldots,m$$
-$$\sum_{j \neq p} \lambda_j y_{rj} - y_r \geq 0, \quad r=1,\ldots,s$$
-$$x_i \leq x_{ip}, \quad y_r \geq y_{rp}$$
-$$\sum_{j \neq p} \lambda_j = 1 \text{ (VRS)}$$
-$$\lambda_j \geq 0, w^+ \geq 0, w^- \geq 0$$
-""",
-            "Congestion": r"""
-**Phase 1: BCC効率性**
-$$\min \theta$$
-$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} \leq \theta x_{ip}, \quad i=1,\ldots,m$$
-$$\sum_{j=1}^{n} \lambda_j y_{rj} \geq y_{rp}, \quad r=1,\ldots,s$$
-$$\sum_{j=1}^{n} \lambda_j = 1$$
-$$\lambda_j \geq 0$$
-
-**Phase 2: 混雑スラック最大化**
-$$\max \sum_{i=1}^{m} s_i^-$$
-$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} + s_i^- = \theta^* x_{ip}, \quad i=1,\ldots,m$$
-$$\sum_{j=1}^{n} \lambda_j y_{rj} = y_{rp}, \quad r=1,\ldots,s$$
-$$\sum_{j=1}^{n} \lambda_j = 1$$
-$$\lambda_j \geq 0, s_i^- \geq 0$$
-""",
-            "Common Weights": r"""
-$$\min \sum_{j=1}^{n} d_j$$
-$$\text{s.t. } \sum_{r=1}^{s} u_r y_{rj} - \sum_{i=1}^{m} v_i x_{ij} + d_j = 0, \quad j=1,\ldots,n$$
-$$u_r \geq \epsilon, \quad v_i \geq \epsilon$$
-$$d_j \geq 0$$
-""",
             "Cost Efficiency": r"""
 $$\min \sum_{i=1}^{m} c_i x_i^*$$
 $$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} \leq x_i^*, \quad i=1,\ldots,m$$
@@ -638,10 +534,6 @@ $$\lambda_j \geq 0, y_r^* \geq 0$$
                             results = model.evaluate_all(orientation='input', method='envelopment')
                         else:
                             results = model.evaluate_all(orientation='output', method='envelopment')
-                    
-                    elif model_type == "MAJ (Super-Efficiency)":
-                        model = MAJModel(st.session_state.inputs, st.session_state.outputs)
-                        results = model.evaluate_all()
                     
                     elif model_type == "SBM":
                         model = SBMModel(st.session_state.inputs, st.session_state.outputs)
@@ -690,26 +582,6 @@ $$\lambda_j \geq 0, y_r^* \geq 0$$
                             st.error("方向ベクトルを正しく設定してください")
                             results = None
                     
-                    elif model_type == "Norm L1":
-                        model = NormL1Model(st.session_state.inputs, st.session_state.outputs)
-                        results = model.evaluate_all(rts=rts)
-                    
-                    elif model_type == "Congestion":
-                        model = CongestionModel(st.session_state.inputs, st.session_state.outputs)
-                        results_list = []
-                        for i in range(len(st.session_state.inputs)):
-                            congestion, lambdas, input_slacks, output_slacks = model.solve(i)
-                            results_list.append({
-                                'DMU': i+1,
-                                'Congestion': congestion,
-                                **{f'Lambda_{j+1}': lambdas[j] for j in range(len(lambdas))}
-                            })
-                        results = pd.DataFrame(results_list)
-                    
-                    elif model_type == "Common Weights":
-                        model = CommonWeightsModel(st.session_state.inputs, st.session_state.outputs)
-                        results = model.evaluate_all()
-                    
                     elif model_type == "Returns to Scale":
                         model = ReturnsToScaleModel(st.session_state.inputs, st.session_state.outputs)
                         results = model.evaluate_all()
@@ -744,7 +616,7 @@ elif page == "追加モデル":
     else:
         model_type = st.selectbox(
             "モデルを選択",
-            ["DRS", "IRS", "FDH", "FDH+", "MEA", "Cross Efficiency", "Non-Radial", "LGO", "RDM"]
+            ["Cross Efficiency"]
         )
         
         rts = st.selectbox("規模の収穫", ["vrs", "drs", "crs", "irs"], index=0)
@@ -753,48 +625,6 @@ elif page == "追加モデル":
         # モデル定式化の表示
         st.subheader("📐 モデル定式化")
         model_formulations = {
-            "DRS": r"""
-**Decreasing Returns to Scale (DRS) モデル:**
-$$\min \theta$$
-$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} \leq \theta x_{ip}, \quad i=1,\ldots,m$$
-$$\sum_{j=1}^{n} \lambda_j y_{rj} \geq y_{rp}, \quad r=1,\ldots,s$$
-$$\sum_{j=1}^{n} \lambda_j \leq 1$$
-$$\lambda_j \geq 0$$
-""",
-            "IRS": r"""
-**Increasing Returns to Scale (IRS) モデル:**
-$$\min \theta$$
-$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} \leq \theta x_{ip}, \quad i=1,\ldots,m$$
-$$\sum_{j=1}^{n} \lambda_j y_{rj} \geq y_{rp}, \quad r=1,\ldots,s$$
-$$\sum_{j=1}^{n} \lambda_j \geq 1$$
-$$\lambda_j \geq 0$$
-""",
-            "FDH": r"""
-**Free Disposal Hull (FDH) モデル:**
-$$\min \theta$$
-$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} \leq \theta x_{ip}, \quad i=1,\ldots,m$$
-$$\sum_{j=1}^{n} \lambda_j y_{rj} \geq y_{rp}, \quad r=1,\ldots,s$$
-$$\sum_{j=1}^{n} \lambda_j = 1$$
-$$\lambda_j \in \{0, 1\}, \quad j=1,\ldots,n$$
-""",
-            "FDH+": r"""
-**FDH+ モデル:**
-$$\min \theta$$
-$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} \leq \theta x_{ip}, \quad i=1,\ldots,m$$
-$$\sum_{j=1}^{n} \lambda_j y_{rj} \geq y_{rp}, \quad r=1,\ldots,s$$
-$$\sum_{j=1}^{n} \lambda_j = 1$$
-$$\lambda_j \geq 0, \quad \lambda_j \leq 1, \quad j=1,\ldots,n$$
-""",
-            "MEA": r"""
-**Multi-directional Efficiency Analysis (MEA) モデル:**
-$$\max \beta$$
-$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} \leq x_{ip} - \beta g_{xi}, \quad i=1,\ldots,m$$
-$$\sum_{j=1}^{n} \lambda_j y_{rj} \geq y_{rp} + \beta g_{yr}, \quad r=1,\ldots,s$$
-$$\sum_{j=1}^{n} \lambda_j = 1 \text{ (VRS)}$$
-$$\lambda_j \geq 0, \quad \beta \geq 0$$
-
-ここで、$g_{xi}$ と $g_{yr}$ は各DMUの潜在的な改善方向
-""",
             "Cross Efficiency": r"""
 **Cross-Efficiency モデル:**
 各DMU $d$ について、他のすべてのDMU $k$ の最適重み $(u_k^*, v_k^*)$ を使用:
@@ -803,34 +633,6 @@ $$E_{dk} = \frac{\sum_{r=1}^{s} u_{rk}^* y_{rd}}{\sum_{i=1}^{m} v_{ik}^* x_{id}}
 
 平均Cross-Efficiency:
 $$\bar{E}_d = \frac{1}{n} \sum_{k=1}^{n} E_{dk}$$
-""",
-            "Non-Radial": r"""
-**Non-Radial DEA モデル:**
-$$\min \frac{1}{m} \sum_{i=1}^{m} \theta_i$$
-$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} \leq \theta_i x_{ip}, \quad i=1,\ldots,m$$
-$$\sum_{j=1}^{n} \lambda_j y_{rj} \geq y_{rp}, \quad r=1,\ldots,s$$
-$$\sum_{j=1}^{n} \lambda_j = 1 \text{ (VRS)}$$
-$$\lambda_j \geq 0, \quad 0 \leq \theta_i \leq 1$$
-""",
-            "LGO": r"""
-**Linear Goal-Oriented (LGO) モデル:**
-$$\min \sum_{i=1}^{m} w_i s_i^- + \sum_{r=1}^{s} w_r s_r^+$$
-$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} + s_i^- = x_{ip}, \quad i=1,\ldots,m$$
-$$\sum_{j=1}^{n} \lambda_j y_{rj} - s_r^+ = y_{rp}, \quad r=1,\ldots,s$$
-$$\sum_{j=1}^{n} \lambda_j = 1 \text{ (VRS)}$$
-$$\lambda_j \geq 0, \quad s_i^- \geq 0, \quad s_r^+ \geq 0$$
-
-ここで、$w_i$ と $w_r$ は入力・出力の重み
-""",
-            "RDM": r"""
-**Range Directional Model (RDM) モデル:**
-$$\max \beta$$
-$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} \leq x_{ip} - \beta R_i^x, \quad i=1,\ldots,m$$
-$$\sum_{j=1}^{n} \lambda_j y_{rj} \geq y_{rp} + \beta R_r^y, \quad r=1,\ldots,s$$
-$$\sum_{j=1}^{n} \lambda_j = 1 \text{ (VRS)}$$
-$$\lambda_j \geq 0, \quad \beta \geq 0$$
-
-ここで、$R_i^x = \max_j x_{ij} - \min_j x_{ij}$、$R_r^y = \max_j y_{rj} - \min_j y_{rj}$
 """
         }
         
@@ -848,88 +650,12 @@ $$\lambda_j \geq 0, \quad \beta \geq 0$$
         if st.button("分析を実行", type="primary"):
             try:
                 with st.spinner("計算中..."):
-                    if model_type == "DRS":
-                        model = DRSModel(st.session_state.inputs, st.session_state.outputs)
-                        if orientation == "入力指向":
-                            results = model.evaluate_all(orientation='input')
-                        else:
-                            results = model.evaluate_all(orientation='output')
-                    
-                    elif model_type == "IRS":
-                        model = IRSModel(st.session_state.inputs, st.session_state.outputs)
-                        if orientation == "入力指向":
-                            results = model.evaluate_all(orientation='input')
-                        else:
-                            results = model.evaluate_all(orientation='output')
-                    
-                    elif model_type == "FDH":
-                        model = FDHModel(st.session_state.inputs, st.session_state.outputs)
-                        if orientation == "入力指向":
-                            results = model.evaluate_all(orientation='input')
-                        else:
-                            results = model.evaluate_all(orientation='output')
-                    
-                    elif model_type == "FDH+":
-                        model = FDHPlusModel(st.session_state.inputs, st.session_state.outputs)
-                        if orientation == "入力指向":
-                            results = model.evaluate_all(orientation='input')
-                        else:
-                            results = model.evaluate_all(orientation='output')
-                    
-                    elif model_type == "MEA":
-                        model = MEAModel(st.session_state.inputs, st.session_state.outputs)
-                        results_list = []
-                        for i in range(len(st.session_state.inputs)):
-                            eff, lambdas, input_slacks, output_slacks, directions = model.solve(
-                                i, orientation='in' if orientation == "入力指向" else 'out', rts=rts
-                            )
-                            results_list.append({
-                                'DMU': i+1,
-                                'MEA_Efficiency': eff,
-                                **{f'Lambda_{j+1}': lambdas[j] for j in range(len(lambdas))}
-                            })
-                        results = pd.DataFrame(results_list)
-                    
-                    elif model_type == "Cross Efficiency":
+                    if model_type == "Cross Efficiency":
                         model = CrossEfficiencyModel(st.session_state.inputs, st.session_state.outputs)
                         results = model.evaluate_all(
                             orientation='io' if orientation == "入力指向" else 'oo',
                             rts=rts
                         )
-                    
-                    elif model_type == "Non-Radial":
-                        model = NonRadialModel(st.session_state.inputs, st.session_state.outputs)
-                        results_list = []
-                        for i in range(len(st.session_state.inputs)):
-                            mean_eff, theta, lambdas, slack, target_in, target_out = model.solve(
-                                i, orientation='io' if orientation == "入力指向" else 'oo', rts=rts
-                            )
-                            results_list.append({
-                                'DMU': i+1,
-                                'Mean_Efficiency': mean_eff,
-                                **{f'Theta_{j+1}': theta[j] for j in range(len(theta))},
-                                **{f'Lambda_{j+1}': lambdas[j] for j in range(len(lambdas))}
-                            })
-                        results = pd.DataFrame(results_list)
-                    
-                    elif model_type == "LGO":
-                        model = LGOModel(st.session_state.inputs, st.session_state.outputs)
-                        results = model.evaluate_all(rts=rts)
-                    
-                    elif model_type == "RDM":
-                        model = RDMModel(st.session_state.inputs, st.session_state.outputs)
-                        results_list = []
-                        for i in range(len(st.session_state.inputs)):
-                            rho, beta, lambdas, target_input, target_output = model.solve(
-                                i, orientation='io' if orientation == "入力指向" else 'oo'
-                            )
-                            results_list.append({
-                                'DMU': i+1,
-                                'RDM_Efficiency': rho,
-                                'Beta': beta,
-                                **{f'Lambda_{j+1}': lambdas[j] for j in range(len(lambdas))}
-                            })
-                        results = pd.DataFrame(results_list)
                     
                     st.session_state.results = results
                     st.success("分析が完了しました！")
@@ -960,79 +686,15 @@ elif page == "特殊モデル":
     else:
         model_type = st.selectbox(
             "モデルを選択",
-            ["Profit Efficiency", "Modified SBM", "Series Network", "Malmquist",
-             "Efficiency Ladder", "Merger Analysis", "Bootstrap DEA",
-             "Add Min", "Add Super-Eff", "DEA-PS", "StoNED"]
+            ["Malmquist", "Bootstrap DEA"]
         )
         
         rts = st.selectbox("規模の収穫", ["vrs", "drs", "crs", "irs"], index=0)
         orientation = st.selectbox("方向", ["入力指向", "出力指向"], index=0)
         
-        # Special parameters
-        input_prices = None
-        output_prices = None
-        network_stages = 2
-        
-        if model_type == "Profit Efficiency":
-            st.subheader("価格の設定")
-            input_price_str = st.text_input(
-                "入力価格（カンマ区切り）",
-                value=",".join(["1"] * st.session_state.inputs.shape[1])
-            )
-            output_price_str = st.text_input(
-                "出力価格（カンマ区切り）",
-                value=",".join(["1"] * st.session_state.outputs.shape[1])
-            )
-            try:
-                input_prices = np.array([float(x.strip()) for x in input_price_str.split(",")])
-                output_prices = np.array([float(x.strip()) for x in output_price_str.split(",")])
-                if len(input_prices) != st.session_state.inputs.shape[1] or len(output_prices) != st.session_state.outputs.shape[1]:
-                    st.error("価格の数が変数の数と一致しません")
-                    input_prices = None
-                    output_prices = None
-            except:
-                st.error("価格の形式が正しくありません")
-                input_prices = None
-                output_prices = None
-        
-        if model_type == "Series Network":
-            network_stages = st.number_input("ネットワーク段階数", min_value=2, max_value=10, value=2, step=1)
-        
         # モデル定式化の表示
         st.subheader("📐 モデル定式化")
         model_formulations = {
-            "Profit Efficiency": r"""
-**Profit Efficiency モデル:**
-$$\max \sum_{r=1}^{s} p_r y_r^* - \sum_{i=1}^{m} w_i x_i^*$$
-$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} \leq x_i^*, \quad i=1,\ldots,m$$
-$$\sum_{j=1}^{n} \lambda_j y_{rj} \geq y_r^*, \quad r=1,\ldots,s$$
-$$\sum_{j=1}^{n} \lambda_j = 1 \text{ (VRS)}$$
-$$\lambda_j \geq 0, \quad x_i^* \geq 0, \quad y_r^* \geq 0$$
-
-ここで、$p_r$ は出力価格、$w_i$ は入力価格
-""",
-            "Modified SBM": r"""
-**Modified SBM モデル:**
-$$\rho^* = \min \frac{1 - \frac{1}{m}\sum_{i=1}^{m} \frac{s_i^-}{x_{ip}}}{1 + \frac{1}{s}\sum_{r=1}^{s} \frac{s_r^+}{y_{rp}}}$$
-$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} + s_i^- = x_{ip}, \quad i=1,\ldots,m$$
-$$\sum_{j=1}^{n} \lambda_j y_{rj} - s_r^+ = y_{rp}, \quad r=1,\ldots,s$$
-$$\sum_{j=1}^{n} \lambda_j = 1$$
-$$\lambda_j \geq 0, \quad s_i^- \geq 0, \quad s_r^+ \geq 0$$
-
-修正: 非効率DMUのスラックを考慮した効率性測定
-""",
-            "Series Network": r"""
-**Series Network DEA モデル:**
-各段階 $k$ について:
-
-$$\min \theta_k$$
-$$\text{s.t. } \sum_{j=1}^{n} \lambda_j^k x_{ij}^k \leq \theta_k x_{ip}^k, \quad i=1,\ldots,m_k$$
-$$\sum_{j=1}^{n} \lambda_j^k z_{hj}^k \geq z_{hp}^k, \quad h=1,\ldots,H_k$$
-$$\sum_{j=1}^{n} \lambda_j^k = 1$$
-$$\lambda_j^k \geq 0$$
-
-全体効率: $\theta^* = \prod_{k=1}^{K} \theta_k^*$
-""",
             "Malmquist": r"""
 **Malmquist Productivity Index:**
 $$M_{t,t+1} = \left[ \frac{D^t(x^{t+1}, y^{t+1})}{D^t(x^t, y^t)} \cdot \frac{D^{t+1}(x^{t+1}, y^{t+1})}{D^{t+1}(x^t, y^t)} \right]^{1/2}$$
@@ -1042,31 +704,6 @@ $$EFFCH = \frac{D^{t+1}(x^{t+1}, y^{t+1})}{D^t(x^t, y^t)}$$
 
 技術変化 (TECHCH):
 $$TECHCH = \left[ \frac{D^t(x^{t+1}, y^{t+1})}{D^{t+1}(x^{t+1}, y^{t+1})} \cdot \frac{D^t(x^t, y^t)}{D^{t+1}(x^t, y^t)} \right]^{1/2}$$
-""",
-            "Efficiency Ladder": r"""
-**Efficiency Ladder モデル:**
-各DMUを効率性のレベルで階層化:
-
-$$L_k = \{j : \theta_j^* \in [\alpha_k, \alpha_{k+1})\}$$
-
-各階層 $k$ について:
-$$\min \theta$$
-$$\text{s.t. } \sum_{j \in L_k} \lambda_j x_{ij} \leq \theta x_{ip}, \quad i=1,\ldots,m$$
-$$\sum_{j \in L_k} \lambda_j y_{rj} \geq y_{rp}, \quad r=1,\ldots,s$$
-$$\sum_{j \in L_k} \lambda_j = 1$$
-$$\lambda_j \geq 0$$
-""",
-            "Merger Analysis": r"""
-**Merger Analysis モデル:**
-マージ後の効率性:
-
-$$\min \theta^{merged}$$
-$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} \leq \theta^{merged} \sum_{k \in G} x_{ik}, \quad i=1,\ldots,m$$
-$$\sum_{j=1}^{n} \lambda_j y_{rj} \geq \sum_{k \in G} y_{rk}, \quad r=1,\ldots,s$$
-$$\sum_{j=1}^{n} \lambda_j = 1$$
-$$\lambda_j \geq 0$$
-
-ここで、$G$ はマージするDMUのグループ
 """,
             "Bootstrap DEA": r"""
 **Bootstrap DEA モデル:**
@@ -1078,55 +715,6 @@ $$\lambda_j \geq 0$$
 $$CI_{1-\alpha} = [\theta_j^{*(lower)}, \theta_j^{*(upper)}]$$
 
 ここで、$\theta_j^{*(lower)}$ と $\theta_j^{*(upper)}$ は $\alpha/2$ と $1-\alpha/2$ 分位数
-""",
-            "Add Min": r"""
-**Additive Min モデル:**
-$$\min \sum_{i=1}^{m} s_i^- + \sum_{r=1}^{s} s_r^+$$
-$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} + s_i^- = x_{ip}, \quad i=1,\ldots,m$$
-$$\sum_{j=1}^{n} \lambda_j y_{rj} - s_r^+ = y_{rp}, \quad r=1,\ldots,s$$
-$$\sum_{j=1}^{n} \lambda_j = 1 \text{ (VRS)}$$
-$$\lambda_j \geq 0, \quad s_i^- \geq 0, \quad s_r^+ \geq 0$$
-
-効率性: $\theta^* = 1 - \frac{\sum s_i^- + \sum s_r^+}{m + s}$
-""",
-            "Add Super-Eff": r"""
-**Additive Super-Efficiency モデル:**
-$$\min \sum_{i=1}^{m} s_i^- + \sum_{r=1}^{s} s_r^+$$
-$$\text{s.t. } \sum_{j \neq p} \lambda_j x_{ij} + s_i^- = x_{ip}, \quad i=1,\ldots,m$$
-$$\sum_{j \neq p} \lambda_j y_{rj} - s_r^+ = y_{rp}, \quad r=1,\ldots,s$$
-$$\sum_{j \neq p} \lambda_j = 1 \text{ (VRS)}$$
-$$\lambda_j \geq 0, \quad s_i^- \geq 0, \quad s_r^+ \geq 0$$
-
-効率性: $\theta^* = 1 + \frac{\sum s_i^- + \sum s_r^+}{m + s}$
-""",
-            "DEA-PS": r"""
-**DEA-PS (Preference Structure) モデル:**
-**Stage 1: 重み付き平均効率性の最小化**
-$$\min \frac{1}{\sum_{i=1}^{m} w_i} \sum_{i=1}^{m} w_i \theta_i$$
-$$\text{s.t. } -\theta_i x_{ip} + \sum_{j=1}^{n} \lambda_j x_{ij} = 0, \quad i=1,\ldots,m$$
-$$\sum_{j=1}^{n} \lambda_j y_{rj} \geq y_{rp}, \quad r=1,\ldots,s$$
-$$\sum_{j=1}^{n} \lambda_j = 1 \text{ (VRS)}$$
-$$\lambda_j \geq 0, \quad \theta_i \geq 0$$
-
-**Stage 2: スラックの最大化**
-$$\max \sum_{i=1}^{m} w_i^s s_i^- + \sum_{r=1}^{s} w_r^s s_r^+$$
-""",
-            "StoNED": r"""
-**StoNED (Stochastic Non-smooth Envelopment of Data) モデル:**
-$$y_j = f(x_j) \exp(v_j - u_j)$$
-
-ここで:
-- $f(x_j)$ は生産フロンティア
-- $v_j \sim N(0, \sigma_v^2)$ はランダムノイズ
-- $u_j \geq 0$ は非効率性項
-
-推定:
-$$\min \sum_{j=1}^{n} (y_j - \hat{y}_j)^2$$
-$$\text{s.t. } \hat{y}_j = \sum_{k=1}^{n} \lambda_k y_k \exp(\beta^T (x_j - x_k))$$
-$$\sum_{k=1}^{n} \lambda_k = 1 \text{ (VRS)}$$
-$$\lambda_k \geq 0$$
-
-効率性: $EFF_j = \exp(-E[u_j | \epsilon_j])$
 """
         }
         
@@ -1144,28 +732,7 @@ $$\lambda_k \geq 0$$
         if st.button("分析を実行", type="primary"):
             try:
                 with st.spinner("計算中..."):
-                    if model_type == "Profit Efficiency":
-                        if input_prices is not None and output_prices is not None:
-                            model = ProfitEfficiencyModel(
-                                st.session_state.inputs, st.session_state.outputs,
-                                input_prices, output_prices
-                            )
-                            results = model.evaluate_all()
-                        else:
-                            st.error("価格を正しく設定してください")
-                            results = None
-                    
-                    elif model_type == "Modified SBM":
-                        model = ModifiedSBMModel(st.session_state.inputs, st.session_state.outputs)
-                        results = model.evaluate_all(orientation='input' if orientation == "入力指向" else 'output')
-                    
-                    elif model_type == "Series Network":
-                        st.warning("Series Networkモデルには中間製品データが必要です。現在は基本的な実装のみサポートします。")
-                        # For now, use regular BCC DEA as fallback
-                        model = BCCModel(st.session_state.inputs, st.session_state.outputs)
-                        results = model.evaluate_all(method='envelopment')
-                    
-                    elif model_type == "Malmquist":
+                    if model_type == "Malmquist":
                         if hasattr(st.session_state, 'inputs_t') and hasattr(st.session_state, 'inputs_t1'):
                             model = MalmquistModel(
                                 st.session_state.inputs_t, st.session_state.outputs_t,
@@ -1176,76 +743,10 @@ $$\lambda_k \geq 0$$
                             st.error("Malmquistモデルには時系列データが必要です。「データアップロード」ページで「時系列データ（Malmquist用）」テンプレートを使用してデータを生成してください。")
                             results = None
                     
-                    elif model_type == "Efficiency Ladder":
-                        model = EfficiencyLadderModel(st.session_state.inputs, st.session_state.outputs)
-                        results = model.evaluate_all()
-                    
-                    elif model_type == "Merger Analysis":
-                        st.info("マージ分析には複数のDMUグループが必要です。デフォルトでは全DMUを1グループとして分析します。")
-                        model = MergerAnalysisModel(st.session_state.inputs, st.session_state.outputs, rts=rts)
-                        # Simple analysis with all DMUs as one group
-                        merger_matrix = np.zeros((1, len(st.session_state.inputs)))
-                        merger_matrix[0, :] = 1.0  # All DMUs in one group
-                        results = model.evaluate_all(merger_matrix, orientation='in' if orientation == "入力指向" else 'out')
-                    
                     elif model_type == "Bootstrap DEA":
                         n_bootstrap = st.number_input("ブートストラップ回数", min_value=100, max_value=10000, value=1000, step=100, key="bootstrap_n")
                         model = BootstrapDEAModel(st.session_state.inputs, st.session_state.outputs, rts=rts, orientation='in' if orientation == "入力指向" else 'out')
                         results = model.evaluate_all(n_rep=n_bootstrap)
-                    
-                    elif model_type == "Add Min":
-                        model = AddMinModel(st.session_state.inputs, st.session_state.outputs)
-                        results_list = []
-                        for i in range(len(st.session_state.inputs)):
-                            objval, lambdas, input_slacks, output_slacks, target_input, target_output = model.solve(i, rts=rts)
-                            results_list.append({
-                                'DMU': i+1,
-                                'AddMin_Objective': objval,
-                                **{f'Lambda_{j+1}': lambdas[j] for j in range(len(lambdas))}
-                            })
-                        results = pd.DataFrame(results_list)
-                    
-                    elif model_type == "Add Super-Eff":
-                        model = AddSuperEffModel(st.session_state.inputs, st.session_state.outputs)
-                        results_list = []
-                        for i in range(len(st.session_state.inputs)):
-                            delta, objval, lambdas, t_input, t_output, target_input, target_output = model.solve(i, rts=rts)
-                            results_list.append({
-                                'DMU': i+1,
-                                'AddSuperEff_Score': delta,
-                                **{f'Lambda_{j+1}': lambdas[j] for j in range(len(lambdas))}
-                            })
-                        results = pd.DataFrame(results_list)
-                    
-                    elif model_type == "DEA-PS":
-                        model = DEAPSModel(st.session_state.inputs, st.session_state.outputs)
-                        results_list = []
-                        for i in range(len(st.session_state.inputs)):
-                            mean_eff, theta, lambdas, slack_output, target_input, target_output = model.solve(
-                                i, orientation='io' if orientation == "入力指向" else 'oo', rts=rts
-                            )
-                            results_list.append({
-                                'DMU': i+1,
-                                'DEAPS_Efficiency': mean_eff,
-                                **{f'Lambda_{j+1}': lambdas[j] for j in range(len(lambdas))}
-                            })
-                        results = pd.DataFrame(results_list)
-                    
-                    elif model_type == "StoNED":
-                        st.info("StoNEDモデルは単一出力のみをサポートします。")
-                        if st.session_state.outputs.shape[1] == 1:
-                            model = StoNEDModel(st.session_state.inputs, st.session_state.outputs.flatten())
-                            stoned_results = model.solve(rts=rts, method='AUTO')
-                            results = pd.DataFrame({
-                                'DMU': range(1, len(st.session_state.inputs) + 1),
-                                'Efficiency': stoned_results['eff'],
-                                'Fitted': stoned_results['fit'],
-                                'Frontier': stoned_results['front'],
-                                'Residual': stoned_results['residuals']
-                            })
-                        else:
-                            st.error("StoNEDモデルは単一出力のみをサポートします")
-                            results = None
                     
                     if results is not None:
                         st.session_state.results = results
@@ -1368,8 +869,8 @@ st.sidebar.info("""
 このアプリはDEAモデルを簡単に使用できるようにするためのツールです。
 
 **対応モデル:**
-- 基本モデル: CCR, BCC, Additive, Two-Phase
-- 高度なモデル: AP, MAJ, SBM, Cost/Revenue Efficiency, Norm L1, Congestion, Common Weights
-- 追加モデル: DRS, IRS, FDH, FDH+, MEA, Cross Efficiency, Non-Radial, LGO, RDM
-- 特殊モデル: Profit Efficiency, Modified SBM, Series Network, Malmquist, Efficiency Ladder, Merger Analysis, Bootstrap DEA, Add Min, Add Super-Eff, DEA-PS, StoNED
+- 基本モデル: CCR, BCC
+- 高度なモデル: AP (Super-Efficiency), SBM, Cost/Revenue Efficiency, Directional Efficiency, Returns to Scale
+- 追加モデル: Cross Efficiency
+- 特殊モデル: Malmquist, Bootstrap DEA
 """)
