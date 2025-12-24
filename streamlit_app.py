@@ -34,11 +34,105 @@ st.set_page_config(
 st.title("📊 DEA Model Analyzer")
 st.markdown("Data Envelopment Analysis (DEA) モデルのインタラクティブ分析ツール")
 
+# Model explanations and references
+MODEL_INFO = {
+    "CCR": {
+        "name": "CCR (Charnes-Cooper-Rhodes) モデル",
+        "explanation": "CCRモデルは、定規模収穫（Constant Returns to Scale, CRS）を仮定した基本的なDEAモデルです。1978年にCharnes、Cooper、Rhodesによって提案され、DEAの基礎となるモデルです。このモデルは、各DMU（Decision Making Unit）の効率を、他のすべてのDMUの線形結合として表現できる効率的なDMUとの比較によって測定します。入力指向では、現在の出力水準を維持しながら入力の削減余地を測定し、出力指向では、現在の入力水準を維持しながら出力の増加余地を測定します。",
+        "references": [
+            "Charnes, A., Cooper, W. W., & Rhodes, E. (1978). Measuring the efficiency of decision making units. *European Journal of Operational Research*, 2(6), 429-444.",
+            "Hosseinzadeh Lotfi, F., Hatami-Marbini, A., Agrell, P. J., Aghayi, N., & Gholami, K. (2020). *Data Envelopment Analysis with R*. Springer. (Chapter 3.2)"
+        ]
+    },
+    "BCC": {
+        "name": "BCC (Banker-Charnes-Cooper) モデル",
+        "explanation": "BCCモデルは、可変規模収穫（Variable Returns to Scale, VRS）を仮定したDEAモデルです。1984年にBanker、Charnes、Cooperによって提案されました。CCRモデルと異なり、BCCモデルは規模の収穫が可変であることを考慮します。これにより、規模の経済性や非経済性を考慮した効率測定が可能になります。BCCモデルは、小規模なDMUと大規模なDMUをより公平に比較できるため、実務で広く使用されています。",
+        "references": [
+            "Banker, R. D., Charnes, A., & Cooper, W. W. (1984). Some models for estimating technical and scale inefficiencies in data envelopment analysis. *Management Science*, 30(9), 1078-1092.",
+            "Hosseinzadeh Lotfi, F., Hatami-Marbini, A., Agrell, P. J., Aghayi, N., & Gholami, K. (2020). *Data Envelopment Analysis with R*. Springer. (Chapter 3.2.3)"
+        ]
+    },
+    "AP (Super-Efficiency)": {
+        "name": "AP (Anderson-Peterson) スーパー効率モデル",
+        "explanation": "APモデルは、効率的なDMU（効率スコアが1のDMU）をランキングするためのスーパー効率モデルです。1993年にAndersonとPetersonによって提案されました。通常のDEAモデルでは、効率的なDMUはすべて効率スコア1となり、それらを区別できません。APモデルでは、評価対象のDMUを参照集合から除外することで、効率的なDMUの効率スコアが1を超える値を取ることができ、効率的なDMU間のランキングが可能になります。スーパー効率スコアが1より大きいほど、そのDMUはより効率的であることを示します。",
+        "references": [
+            "Andersen, P., & Petersen, N. C. (1993). A procedure for ranking efficient units in data envelopment analysis. *Management Science*, 39(10), 1261-1264.",
+            "Hosseinzadeh Lotfi, F., Hatami-Marbini, A., Agrell, P. J., Aghayi, N., & Gholami, K. (2020). *Data Envelopment Analysis with R*. Springer. (Chapter 4.2)"
+        ]
+    },
+    "Returns to Scale": {
+        "name": "規模の収穫モデル",
+        "explanation": "規模の収穫モデルは、各DMUの規模の収穫（Returns to Scale, RTS）を判定するためのモデルです。規模の収穫には、定規模収穫（CRS）、可変規模収穫（VRS）、収穫逓減（DRS）、収穫逓増（IRS）があります。このモデルは、各DMUが最適規模にあるか、規模を拡大または縮小すべきかを判断するために使用されます。規模の収穫の判定は、効率改善のための戦略的指針を提供します。",
+        "references": [
+            "Banker, R. D. (1984). Estimating most productive scale size using data envelopment analysis. *European Journal of Operational Research*, 17(1), 35-44.",
+            "Hosseinzadeh Lotfi, F., Hatami-Marbini, A., Agrell, P. J., Aghayi, N., & Gholami, K. (2020). *Data Envelopment Analysis with R*. Springer. (Chapter 4.5)"
+        ]
+    },
+    "Cost Efficiency": {
+        "name": "コスト効率モデル",
+        "explanation": "コスト効率モデルは、入力コストを考慮した効率測定モデルです。このモデルは、技術的効率だけでなく、コスト効率も測定します。コスト効率は、現在の出力水準を維持しながら、最小コストで達成可能な入力の組み合わせと、実際のコストとの比率として定義されます。コスト効率は、技術的効率と配分効率の積として分解できます。このモデルは、価格情報が利用可能な場合に、より実用的な効率評価を提供します。",
+        "references": [
+            "Färe, R., Grosskopf, S., & Lovell, C. A. K. (1985). *The Measurement of Efficiency of Production*. Kluwer Academic Publishers.",
+            "Hosseinzadeh Lotfi, F., Hatami-Marbini, A., Agrell, P. J., Aghayi, N., & Gholami, K. (2020). *Data Envelopment Analysis with R*. Springer. (Chapter 4.6)"
+        ]
+    },
+    "Revenue Efficiency": {
+        "name": "収益効率モデル",
+        "explanation": "収益効率モデルは、出力価格を考慮した効率測定モデルです。このモデルは、現在の入力水準を維持しながら、最大収益で達成可能な出力の組み合わせと、実際の収益との比率として定義されます。収益効率は、技術的効率と配分効率の積として分解できます。このモデルは、出力の価格情報が利用可能な場合に、収益最大化の観点から効率評価を提供します。",
+        "references": [
+            "Färe, R., Grosskopf, S., & Lovell, C. A. K. (1985). *The Measurement of Efficiency of Production*. Kluwer Academic Publishers.",
+            "Hosseinzadeh Lotfi, F., Hatami-Marbini, A., Agrell, P. J., Aghayi, N., & Gholami, K. (2020). *Data Envelopment Analysis with R*. Springer. (Chapter 4.7)"
+        ]
+    },
+    "Malmquist": {
+        "name": "Malmquist生産性指数",
+        "explanation": "Malmquist生産性指数は、時系列データを用いて生産性の変化を測定するモデルです。1953年にMalmquistによって提案され、1994年にFäreらによってDEAに適用されました。この指数は、2つの時点間の生産性変化を、技術的効率の変化（Efficiency Change, EC）と技術進歩（Technical Change, TC）に分解します。Malmquist指数が1より大きい場合、生産性が向上したことを示し、1より小さい場合、生産性が低下したことを示します。",
+        "references": [
+            "Malmquist, S. (1953). Index numbers and indifference surfaces. *Trabajos de Estadística*, 4(2), 209-242.",
+            "Färe, R., Grosskopf, S., Norris, M., & Zhang, Z. (1994). Productivity growth, technical progress, and efficiency change in industrialized countries. *American Economic Review*, 84(1), 66-83.",
+            "Hosseinzadeh Lotfi, F., Hatami-Marbini, A., Agrell, P. J., Aghayi, N., & Gholami, K. (2020). *Data Envelopment Analysis with R*. Springer. (Chapter 4.8)"
+        ]
+    },
+    "SBM": {
+        "name": "SBM (Slacks-Based Measure) モデル",
+        "explanation": "SBMモデルは、スラックに基づく非放射的効率測定モデルです。2001年にToneによって提案されました。従来の放射的DEAモデル（CCR、BCC）とは異なり、SBMモデルは入力と出力のスラックを直接考慮するため、非効率性の測定がより正確になります。SBM効率は0から1の間の値を取り、1に近いほど効率的であることを示します。このモデルは、入力と出力の両方のスラックを同時に考慮するため、より包括的な効率評価を提供します。",
+        "references": [
+            "Tone, K. (2001). A slacks-based measure of efficiency in data envelopment analysis. *European Journal of Operational Research*, 130(3), 498-509.",
+            "Hosseinzadeh Lotfi, F., Hatami-Marbini, A., Agrell, P. J., Aghayi, N., & Gholami, K. (2020). *Data Envelopment Analysis with R*. Springer. (Chapter 4.9)"
+        ]
+    },
+    "Directional Efficiency": {
+        "name": "方向性効率モデル",
+        "explanation": "方向性効率モデルは、指定された方向への効率を測定するモデルです。このモデルは、入力と出力の改善方向を明示的に指定できるため、より柔軟な効率測定が可能です。従来の放射的DEAモデルは、入力指向または出力指向のいずれか一方のみを考慮しますが、方向性効率モデルでは、入力と出力の両方を同時に改善する方向を指定できます。このモデルは、特定の改善戦略に基づいた効率評価を提供します。",
+        "references": [
+            "Chambers, R. G., Chung, Y., & Färe, R. (1996). Benefit and distance functions. *Journal of Economic Theory*, 70(2), 407-419.",
+            "Hosseinzadeh Lotfi, F., Hatami-Marbini, A., Agrell, P. J., Aghayi, N., & Gholami, K. (2020). *Data Envelopment Analysis with R*. Springer. (Chapter 4.15)"
+        ]
+    },
+    "Bootstrap DEA": {
+        "name": "ブートストラップDEA",
+        "explanation": "ブートストラップDEAは、DEA効率スコアの統計的推論を可能にするモデルです。1998年にSimarとWilsonによって提案されました。DEAは非パラメトリックな手法であるため、従来の統計的推論が困難でした。ブートストラップ法を用いることで、効率スコアの信頼区間やバイアス補正を提供し、効率評価の統計的有意性を評価できます。このモデルは、サンプルサイズが小さい場合や、効率スコアの不確実性を考慮したい場合に特に有用です。",
+        "references": [
+            "Simar, L., & Wilson, P. W. (1998). Sensitivity analysis of efficiency scores: How to bootstrap in nonparametric frontier models. *Management Science*, 44(11), 49-61.",
+            "Simar, L., & Wilson, P. W. (2000). Statistical inference in nonparametric frontier models: The state of the art. *Journal of Productivity Analysis*, 13(1), 49-78.",
+            "Bogetoft, P., & Otto, L. (2011). *Benchmarking with DEA, SFA, and R*. Springer-Verlag."
+        ]
+    },
+    "Cross Efficiency": {
+        "name": "クロス効率分析",
+        "explanation": "クロス効率分析は、各DMUの重みを使用して他のDMUの効率を評価する手法です。1994年にDoyleとGreenによって提案されました。従来のDEAでは、各DMUは自分に最も有利な重みを選択するため、自己効率スコアが過大評価される可能性があります。クロス効率分析では、各DMUの重みを使用して他のすべてのDMUの効率を評価し、平均クロス効率スコアを計算します。これにより、より公平で一貫性のある効率ランキングが得られます。",
+        "references": [
+            "Doyle, J., & Green, R. (1994). Efficiency and cross-efficiency in DEA: derivations, meanings and uses. *Journal of the Operational Research Society*, 45(5), 567-578.",
+            "Sexton, T. R., Silkman, R. H., & Hogan, A. J. (1986). Data envelopment analysis: Critique and extensions. *New Directions for Program Evaluation*, 1986(32), 73-105."
+        ]
+    }
+}
+
 # Sidebar for navigation
 st.sidebar.title("ナビゲーション")
 page = st.sidebar.selectbox(
     "ページを選択",
-    ["データアップロード", "基本モデル", "高度なモデル", "追加モデル", "特殊モデル", "結果の可視化"]
+    ["データアップロード", "モデル分析", "結果の可視化"]
 )
 
 # Initialize session state
@@ -268,24 +362,54 @@ if page == "データアップロード":
             mime="text/csv"
         )
 
-# Basic Models Page
-elif page == "基本モデル":
-    st.header("🔷 基本DEAモデル")
+# Model Analysis Page (Unified)
+elif page == "モデル分析":
+    st.header("📊 DEAモデル分析")
     
     if st.session_state.inputs is None or st.session_state.outputs is None:
         st.warning("⚠️ まず「データアップロード」ページでデータを設定してください")
     else:
+        # All models in one list
+        all_models = [
+            "CCR", "BCC", "AP (Super-Efficiency)", "Returns to Scale",
+            "Cost Efficiency", "Revenue Efficiency", "Malmquist",
+            "SBM", "Directional Efficiency", "Bootstrap DEA", "Cross Efficiency"
+        ]
+        
         model_type = st.selectbox(
             "モデルを選択",
-            ["CCR", "BCC"]
+            all_models
         )
         
-        orientation = st.selectbox("方向", ["入力指向", "出力指向"], index=0)
-        method = st.selectbox("方法", ["包絡モデル", "乗数モデル"], index=0)
+        # Display model explanation and references
+        if model_type in MODEL_INFO:
+            with st.expander("📖 モデルの解説と参考文献", expanded=False):
+                st.markdown(f"### {MODEL_INFO[model_type]['name']}")
+                st.markdown(f"**解説:** {MODEL_INFO[model_type]['explanation']}")
+                st.markdown("**参考文献:**")
+                for ref in MODEL_INFO[model_type]['references']:
+                    st.markdown(f"- {ref}")
         
-        # 包絡型と乗数型の違いについての説明
-        if method == "乗数モデル":
-            st.info("""
+        # Initialize variables for all models
+        orientation = None
+        method = None
+        input_costs = None
+        output_prices = None
+        g_inputs = None
+        g_outputs = None
+        sbm_type = "Model 1"
+        ap_orientation = "入力指向"
+        rts = "vrs"
+        n_bootstrap = 1000
+        
+        # Model-specific parameters
+        if model_type in ["CCR", "BCC"]:
+            orientation = st.selectbox("方向", ["入力指向", "出力指向"], index=0)
+            method = st.selectbox("方法", ["包絡モデル", "乗数モデル"], index=0)
+            
+            # 包絡型と乗数型の違いについての説明
+            if method == "乗数モデル":
+                st.info("""
             **包絡型と乗数型について:**
             
             包絡型と乗数型は**双対問題**の関係にあり、理論的には同じ効率値になります。
@@ -389,32 +513,10 @@ $$u_r \geq \epsilon, \quad v_i \geq \epsilon$$
                 file_name=f"{model_type}_results.csv",
                 mime="text/csv"
             )
-
-# Advanced Models Page
-elif page == "高度なモデル":
-    st.header("🔶 高度なDEAモデル")
-    
-    if st.session_state.inputs is None or st.session_state.outputs is None:
-        st.warning("⚠️ まず「データアップロード」ページでデータを設定してください")
-    else:
-        model_type = st.selectbox(
-            "モデルを選択",
-            ["AP (Super-Efficiency)", "SBM", "Cost Efficiency", 
-             "Revenue Efficiency", "Directional Efficiency", "Returns to Scale"]
-        )
         
-        # Initialize variables
-        input_costs = None
-        output_prices = None
-        g_inputs = None
-        g_outputs = None
-        sbm_type = "Model 1"
-        ap_orientation = "入力指向"
-        rts = "vrs"
-        
-        # RTS parameter for models that support it
-        if model_type in ["SBM", "Directional Efficiency"]:
-            rts = st.selectbox("規模の収穫", ["vrs", "drs", "crs", "irs"], index=0, key="advanced_rts")
+        # Model-specific parameter settings
+        if model_type in ["SBM", "Directional Efficiency", "Returns to Scale", "Bootstrap DEA", "Cross Efficiency"]:
+            rts = st.selectbox("規模の収穫", ["vrs", "drs", "crs", "irs"], index=0, key="model_rts")
         
         if model_type == "Cost Efficiency":
             st.subheader("入力コストの設定")
@@ -473,9 +575,43 @@ elif page == "高度なモデル":
         if model_type == "SBM":
             sbm_type = st.selectbox("SBMタイプ", ["Model 1", "Model 2"], index=0)
         
+        if model_type == "Bootstrap DEA":
+            n_bootstrap = st.number_input("ブートストラップ回数", min_value=100, max_value=10000, value=1000, step=100, key="bootstrap_n")
+            orientation = st.selectbox("方向", ["入力指向", "出力指向"], index=0, key="bootstrap_orient")
+        
+        if model_type == "Cross Efficiency":
+            orientation = st.selectbox("方向", ["入力指向", "出力指向"], index=0, key="cross_orient")
+        
         # モデル定式化の表示
         st.subheader("📐 モデル定式化")
         model_formulations = {
+            "CCR": r"""
+**入力指向包絡モデル:**
+$$\min \theta$$
+$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} \leq \theta x_{ip}, \quad i=1,\ldots,m$$
+$$\sum_{j=1}^{n} \lambda_j y_{rj} \geq y_{rp}, \quad r=1,\ldots,s$$
+$$\lambda_j \geq 0, \quad j=1,\ldots,n$$
+
+**入力指向乗数モデル:**
+$$\max \sum_{r=1}^{s} u_r y_{rp}$$
+$$\text{s.t. } \sum_{r=1}^{s} u_r y_{rj} - \sum_{i=1}^{m} v_i x_{ij} \leq 0, \quad j=1,\ldots,n$$
+$$\sum_{i=1}^{m} v_i x_{ip} = 1$$
+$$u_r \geq \epsilon, \quad v_i \geq \epsilon$$
+""",
+            "BCC": r"""
+**入力指向包絡モデル:**
+$$\min \theta$$
+$$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} \leq \theta x_{ip}, \quad i=1,\ldots,m$$
+$$\sum_{j=1}^{n} \lambda_j y_{rj} \geq y_{rp}, \quad r=1,\ldots,s$$
+$$\sum_{j=1}^{n} \lambda_j = 1$$
+$$\lambda_j \geq 0, \quad j=1,\ldots,n$$
+
+**入力指向乗数モデル:**
+$$\max \sum_{r=1}^{s} u_r y_{rp} + u_0$$
+$$\text{s.t. } \sum_{r=1}^{s} u_r y_{rj} - \sum_{i=1}^{m} v_i x_{ij} + u_0 \leq 0, \quad j=1,\ldots,n$$
+$$\sum_{i=1}^{m} v_i x_{ip} = 1$$
+$$u_r \geq \epsilon, \quad v_i \geq \epsilon$$
+""",
             "AP (Super-Efficiency)": r"""
 **入力指向包絡モデル:**
 $$\min \theta$$
@@ -511,6 +647,36 @@ $$\text{s.t. } \sum_{j=1}^{n} \lambda_j x_{ij} \leq x_{ip}, \quad i=1,\ldots,m$$
 $$\sum_{j=1}^{n} \lambda_j y_{rj} \geq y_r^*, \quad r=1,\ldots,s$$
 $$\sum_{j=1}^{n} \lambda_j = 1 \text{ (VRS)}$$
 $$\lambda_j \geq 0, y_r^* \geq 0$$
+""",
+            "Malmquist": r"""
+**Malmquist Productivity Index:**
+$$M_{t,t+1} = \left[ \frac{D^t(x^{t+1}, y^{t+1})}{D^t(x^t, y^t)} \cdot \frac{D^{t+1}(x^{t+1}, y^{t+1})}{D^{t+1}(x^t, y^t)} \right]^{1/2}$$
+
+技術効率変化 (EFFCH):
+$$EFFCH = \frac{D^{t+1}(x^{t+1}, y^{t+1})}{D^t(x^t, y^t)}$$
+
+技術変化 (TECHCH):
+$$TECHCH = \left[ \frac{D^t(x^{t+1}, y^{t+1})}{D^{t+1}(x^{t+1}, y^{t+1})} \cdot \frac{D^t(x^t, y^t)}{D^{t+1}(x^t, y^t)} \right]^{1/2}$$
+""",
+            "Bootstrap DEA": r"""
+**Bootstrap DEA モデル:**
+1. 元のDEA効率性 $\theta_j^*$ を計算
+2. $B$ 回のブートストラップサンプルを生成
+3. 各サンプル $b$ について効率性 $\theta_j^{*(b)}$ を計算
+4. 信頼区間を計算:
+
+$$CI_{1-\alpha} = [\theta_j^{*(lower)}, \theta_j^{*(upper)}]$$
+
+ここで、$\theta_j^{*(lower)}$ と $\theta_j^{*(upper)}$ は $\alpha/2$ と $1-\alpha/2$ 分位数
+""",
+            "Cross Efficiency": r"""
+**Cross-Efficiency モデル:**
+各DMU $d$ について、他のすべてのDMU $k$ の最適重み $(u_k^*, v_k^*)$ を使用:
+
+$$E_{dk} = \frac{\sum_{r=1}^{s} u_{rk}^* y_{rd}}{\sum_{i=1}^{m} v_{ik}^* x_{id}}$$
+
+平均Cross-Efficiency:
+$$\bar{E}_d = \frac{1}{n} \sum_{k=1}^{n} E_{dk}$$
 """
         }
         
@@ -528,7 +694,34 @@ $$\lambda_j \geq 0, y_r^* \geq 0$$
         if st.button("分析を実行", type="primary"):
             try:
                 with st.spinner("計算中..."):
-                    if model_type == "AP (Super-Efficiency)":
+                    results = None
+                    
+                    if model_type == "CCR":
+                        model = CCRModel(st.session_state.inputs, st.session_state.outputs)
+                        if method == "包絡モデル":
+                            if orientation == "入力指向":
+                                results = model.evaluate_all(method='envelopment')
+                            else:
+                                results_list = []
+                                for i in range(len(st.session_state.inputs)):
+                                    eff, lambdas, input_slacks, output_slacks = model.solve_output_oriented_envelopment(i)
+                                    results_list.append({
+                                        'DMU': i+1,
+                                        'Efficiency': eff,
+                                        **{f'Lambda_{j+1}': lambdas[j] for j in range(len(lambdas))}
+                                    })
+                                results = pd.DataFrame(results_list)
+                        else:
+                            results = model.evaluate_all(method='multiplier')
+                    
+                    elif model_type == "BCC":
+                        model = BCCModel(st.session_state.inputs, st.session_state.outputs)
+                        if method == "包絡モデル":
+                            results = model.evaluate_all(method='envelopment')
+                        else:
+                            results = model.evaluate_all(method='multiplier')
+                    
+                    elif model_type == "AP (Super-Efficiency)":
                         model = APModel(st.session_state.inputs, st.session_state.outputs)
                         if ap_orientation == "入力指向":
                             results = model.evaluate_all(orientation='input', method='envelopment')
@@ -586,153 +779,7 @@ $$\lambda_j \geq 0, y_r^* \geq 0$$
                         model = ReturnsToScaleModel(st.session_state.inputs, st.session_state.outputs)
                         results = model.evaluate_all()
                     
-                    if results is not None:
-                        st.session_state.results = results
-                        st.success("分析が完了しました！")
-            
-            except Exception as e:
-                st.error(f"エラー: {str(e)}")
-                import traceback
-                st.code(traceback.format_exc())
-        
-        if st.session_state.results is not None:
-            st.subheader("結果")
-            st.dataframe(st.session_state.results, use_container_width=True)
-            
-            csv = st.session_state.results.to_csv(index=False)
-            st.download_button(
-                label="結果をCSVでダウンロード",
-                data=csv,
-                file_name=f"{model_type.replace(' ', '_')}_results.csv",
-                mime="text/csv"
-            )
-
-# Additional Models Page
-elif page == "追加モデル":
-    st.header("🔸 追加DEAモデル")
-    
-    if st.session_state.inputs is None or st.session_state.outputs is None:
-        st.warning("⚠️ まず「データアップロード」ページでデータを設定してください")
-    else:
-        model_type = st.selectbox(
-            "モデルを選択",
-            ["Cross Efficiency"]
-        )
-        
-        rts = st.selectbox("規模の収穫", ["vrs", "drs", "crs", "irs"], index=0)
-        orientation = st.selectbox("方向", ["入力指向", "出力指向"], index=0)
-        
-        # モデル定式化の表示
-        st.subheader("📐 モデル定式化")
-        model_formulations = {
-            "Cross Efficiency": r"""
-**Cross-Efficiency モデル:**
-各DMU $d$ について、他のすべてのDMU $k$ の最適重み $(u_k^*, v_k^*)$ を使用:
-
-$$E_{dk} = \frac{\sum_{r=1}^{s} u_{rk}^* y_{rd}}{\sum_{i=1}^{m} v_{ik}^* x_{id}}$$
-
-平均Cross-Efficiency:
-$$\bar{E}_d = \frac{1}{n} \sum_{k=1}^{n} E_{dk}$$
-"""
-        }
-        
-        if model_type in model_formulations:
-            # Display each line separately for better formatting
-            formula_text = model_formulations[model_type]
-            # Split by double newlines to preserve paragraph breaks
-            paragraphs = formula_text.split('\n\n')
-            for para in paragraphs:
-                if para.strip():
-                    st.markdown(para.strip())
-        else:
-            st.info(f"{model_type}モデルの定式化は準備中です。")
-        
-        if st.button("分析を実行", type="primary"):
-            try:
-                with st.spinner("計算中..."):
-                    if model_type == "Cross Efficiency":
-                        model = CrossEfficiencyModel(st.session_state.inputs, st.session_state.outputs)
-                        results = model.evaluate_all(
-                            orientation='io' if orientation == "入力指向" else 'oo',
-                            rts=rts
-                        )
-                    
-                    st.session_state.results = results
-                    st.success("分析が完了しました！")
-            
-            except Exception as e:
-                st.error(f"エラー: {str(e)}")
-                import traceback
-                st.code(traceback.format_exc())
-        
-        if st.session_state.results is not None:
-            st.subheader("結果")
-            st.dataframe(st.session_state.results, use_container_width=True)
-            
-            csv = st.session_state.results.to_csv(index=False)
-            st.download_button(
-                label="結果をCSVでダウンロード",
-                data=csv,
-                file_name=f"{model_type}_results.csv",
-                mime="text/csv"
-            )
-
-# Special Models Page
-elif page == "特殊モデル":
-    st.header("🔹 特殊DEAモデル")
-    
-    if st.session_state.inputs is None or st.session_state.outputs is None:
-        st.warning("⚠️ まず「データアップロード」ページでデータを設定してください")
-    else:
-        model_type = st.selectbox(
-            "モデルを選択",
-            ["Malmquist", "Bootstrap DEA"]
-        )
-        
-        rts = st.selectbox("規模の収穫", ["vrs", "drs", "crs", "irs"], index=0)
-        orientation = st.selectbox("方向", ["入力指向", "出力指向"], index=0)
-        
-        # モデル定式化の表示
-        st.subheader("📐 モデル定式化")
-        model_formulations = {
-            "Malmquist": r"""
-**Malmquist Productivity Index:**
-$$M_{t,t+1} = \left[ \frac{D^t(x^{t+1}, y^{t+1})}{D^t(x^t, y^t)} \cdot \frac{D^{t+1}(x^{t+1}, y^{t+1})}{D^{t+1}(x^t, y^t)} \right]^{1/2}$$
-
-技術効率変化 (EFFCH):
-$$EFFCH = \frac{D^{t+1}(x^{t+1}, y^{t+1})}{D^t(x^t, y^t)}$$
-
-技術変化 (TECHCH):
-$$TECHCH = \left[ \frac{D^t(x^{t+1}, y^{t+1})}{D^{t+1}(x^{t+1}, y^{t+1})} \cdot \frac{D^t(x^t, y^t)}{D^{t+1}(x^t, y^t)} \right]^{1/2}$$
-""",
-            "Bootstrap DEA": r"""
-**Bootstrap DEA モデル:**
-1. 元のDEA効率性 $\theta_j^*$ を計算
-2. $B$ 回のブートストラップサンプルを生成
-3. 各サンプル $b$ について効率性 $\theta_j^{*(b)}$ を計算
-4. 信頼区間を計算:
-
-$$CI_{1-\alpha} = [\theta_j^{*(lower)}, \theta_j^{*(upper)}]$$
-
-ここで、$\theta_j^{*(lower)}$ と $\theta_j^{*(upper)}$ は $\alpha/2$ と $1-\alpha/2$ 分位数
-"""
-        }
-        
-        if model_type in model_formulations:
-            # Display each line separately for better formatting
-            formula_text = model_formulations[model_type]
-            # Split by double newlines to preserve paragraph breaks
-            paragraphs = formula_text.split('\n\n')
-            for para in paragraphs:
-                if para.strip():
-                    st.markdown(para.strip())
-        else:
-            st.info(f"{model_type}モデルの定式化は準備中です。")
-        
-        if st.button("分析を実行", type="primary"):
-            try:
-                with st.spinner("計算中..."):
-                    if model_type == "Malmquist":
+                    elif model_type == "Malmquist":
                         if hasattr(st.session_state, 'inputs_t') and hasattr(st.session_state, 'inputs_t1'):
                             model = MalmquistModel(
                                 st.session_state.inputs_t, st.session_state.outputs_t,
@@ -744,9 +791,15 @@ $$CI_{1-\alpha} = [\theta_j^{*(lower)}, \theta_j^{*(upper)}]$$
                             results = None
                     
                     elif model_type == "Bootstrap DEA":
-                        n_bootstrap = st.number_input("ブートストラップ回数", min_value=100, max_value=10000, value=1000, step=100, key="bootstrap_n")
                         model = BootstrapDEAModel(st.session_state.inputs, st.session_state.outputs, rts=rts, orientation='in' if orientation == "入力指向" else 'out')
                         results = model.evaluate_all(n_rep=n_bootstrap)
+                    
+                    elif model_type == "Cross Efficiency":
+                        model = CrossEfficiencyModel(st.session_state.inputs, st.session_state.outputs)
+                        results = model.evaluate_all(
+                            orientation='io' if orientation == "入力指向" else 'oo',
+                            rts=rts
+                        )
                     
                     if results is not None:
                         st.session_state.results = results
@@ -869,8 +922,7 @@ st.sidebar.info("""
 このアプリはDEAモデルを簡単に使用できるようにするためのツールです。
 
 **対応モデル:**
-- 基本モデル: CCR, BCC
-- 高度なモデル: AP (Super-Efficiency), SBM, Cost/Revenue Efficiency, Directional Efficiency, Returns to Scale
-- 追加モデル: Cross Efficiency
-- 特殊モデル: Malmquist, Bootstrap DEA
+- CCR, BCC, AP (Super-Efficiency), Returns to Scale
+- Cost Efficiency, Revenue Efficiency, Malmquist
+- SBM, Directional Efficiency, Bootstrap DEA, Cross Efficiency
 """)
