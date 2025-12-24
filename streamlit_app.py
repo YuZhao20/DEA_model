@@ -465,55 +465,6 @@ $$u_r \geq \epsilon, \quad v_i \geq \epsilon$$
         else:
             st.info(f"{model_type}モデルの定式化は準備中です。")
         
-        if st.button("分析を実行", type="primary"):
-            try:
-                with st.spinner("計算中..."):
-                    if model_type == "CCR":
-                        model = CCRModel(st.session_state.inputs, st.session_state.outputs)
-                        if method == "包絡モデル":
-                            if orientation == "入力指向":
-                                results = model.evaluate_all(method='envelopment')
-                            else:
-                                results_list = []
-                                for i in range(len(st.session_state.inputs)):
-                                    eff, lambdas, input_slacks, output_slacks = model.solve_output_oriented_envelopment(i)
-                                    results_list.append({
-                                        'DMU': i+1,
-                                        'Efficiency': eff,
-                                        **{f'Lambda_{j+1}': lambdas[j] for j in range(len(lambdas))}
-                                    })
-                                results = pd.DataFrame(results_list)
-                        else:
-                            results = model.evaluate_all(method='multiplier')
-                    
-                    elif model_type == "BCC":
-                        model = BCCModel(st.session_state.inputs, st.session_state.outputs)
-                        if method == "包絡モデル":
-                            results = model.evaluate_all(method='envelopment')
-                        else:
-                            results = model.evaluate_all(method='multiplier')
-                    
-                    st.session_state.results = results
-                    st.success("分析が完了しました！")
-            
-            except Exception as e:
-                st.error(f"エラー: {str(e)}")
-                import traceback
-                st.code(traceback.format_exc())
-        
-        if st.session_state.results is not None:
-            st.subheader("結果")
-            st.dataframe(st.session_state.results, use_container_width=True)
-            
-            # Download button
-            csv = st.session_state.results.to_csv(index=False)
-            st.download_button(
-                label="結果をCSVでダウンロード",
-                data=csv,
-                file_name=f"{model_type}_results.csv",
-                mime="text/csv"
-            )
-        
         # Model-specific parameter settings
         if model_type in ["SBM", "Directional Efficiency", "Returns to Scale", "Bootstrap DEA", "Cross Efficiency"]:
             rts = st.selectbox("規模の収穫", ["vrs", "drs", "crs", "irs"], index=0, key="model_rts")
