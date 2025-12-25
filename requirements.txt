@@ -1,0 +1,10 @@
+pandas
+numpy
+scipy
+matplotlib
+streamlit
+scikit-learn
+# For verification feature
+Pyfrontier>=1.1.0
+# Note: pyDEA can be installed from GitHub if needed:
+# pip install git+https://github.com/araith/pyDEA.git
