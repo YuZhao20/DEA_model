@@ -246,7 +246,7 @@ CCRモデルとBCCモデルの効率スコアを比較し、規模効率 (Scale 
 **Scale Efficiency (規模効率) の計算:**
 
 $$
-SE = \\frac{\\theta_{CCR}}{\\theta_{BCC}}
+SE = \frac{\theta_{CCR}}{\theta_{BCC}}
 $$
 
 **変数の説明 (Variable Definitions):**
@@ -797,7 +797,7 @@ if page == "データアップロード":
     """)
 
     uploaded_file = st.file_uploader("CSVファイルをアップロード", type=['csv'])
-    if uploaded_file is not None:
+if uploaded_file is not None:
 
 
 
@@ -1089,7 +1089,7 @@ elif page == "モデル分析":
                         model = BCCModel(st.session_state.inputs, st.session_state.outputs)
                         if method == "包絡モデル":
                             results = model.evaluate_all(method='envelopment')
-                        else:
+else:
                             results = model.evaluate_all(method='multiplier')
 
                     elif model_type == "Super-Efficiency":
