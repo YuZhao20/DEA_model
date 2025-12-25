@@ -1089,7 +1089,7 @@ elif page == "モデル分析":
                         model = BCCModel(st.session_state.inputs, st.session_state.outputs)
                         if method == "包絡モデル":
                             results = model.evaluate_all(method='envelopment')
-else:
+                        else:
                             results = model.evaluate_all(method='multiplier')
 
                     elif model_type == "Super-Efficiency":
