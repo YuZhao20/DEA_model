@@ -797,7 +797,7 @@ if page == "データアップロード":
     """)
 
     uploaded_file = st.file_uploader("CSVファイルをアップロード", type=['csv'])
-if uploaded_file is not None:
+    if uploaded_file is not None:
 
 
 
